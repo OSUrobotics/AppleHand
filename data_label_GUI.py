@@ -212,7 +212,7 @@ def next_state(event):
                 big_labels[i] = -1
                 big_quats[:,i] = [-1,-1,-1,-1]
         print('load next episode')
-        filename = "/home/orochi/Downloads/Deep_Learning_Data/Batch" + batch
+        filename = "./Deep_Learning_Data/Batch" + batch
         print("Saving...")
         data = {}
         data["states"] = np.vstack((forces_x,forces_y,forces_z))
