@@ -18,7 +18,7 @@ import time
 
 
 class AppleClassifier():
-    def __init__(self, train_dataset, test_dataset, param_dict):
+    def __init__(self, train_dataset, test_dataset, param_dict, model=None):
         """
         A class for training, evaluating and generating plots of a classifier
         for apple pick data
@@ -82,13 +82,18 @@ class AppleClassifier():
         self.FP_rate = []
         self.losses = []
         self.steps = []
+        self.visualization_range=[0,5000]
         # Instantiate the model
-        if self.model_type == 'GRU':
-            self.model = GRUNet(self.input_dim, self.hidden, self.output_dim,
-                                self.layers, self.drop_prob)
-        elif self.model_type == 'LSTM':
-            self.model = LSTMNet(self.input_dim, self.hidden, self.output_dim,
-                                 self.layers, self.drop_prob)
+        if model is not None:
+            self.model = []
+            self.load_model(model)
+        else:
+            if self.model_type == 'GRU':
+                self.model = GRUNet(self.input_dim, self.hidden, self.output_dim,
+                                    self.layers, self.drop_prob)
+            elif self.model_type == 'LSTM':
+                self.model = LSTMNet(self.input_dim, self.hidden, self.output_dim,
+                                     self.layers, self.drop_prob)
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
         else:
@@ -103,6 +108,26 @@ class AppleClassifier():
         self.test_size = len(test_dataset)
         self.train_size = len(train_dataset)
 
+    def load_model(self, filepath):
+        self.model = torch.load(filepath + '.pt')
+        self.model.eval()
+
+    def load_model_data(self, filepath):
+        file = open(filepath + '.pkl', 'rb')
+        temp_dict = pkl.load(file)
+        file.close()
+        self.accuracies = temp_dict['accuracies']
+        self.TP_rate = temp_dict['TP_rate']
+        self.FP_rate = temp_dict['FP_rate']
+        self.losses = temp_dict['losses']
+        self.steps = temp_dict['steps']
+
+    def get_data_dict(self):
+        classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
+                           'steps': self.steps, 'TP': self.TP_rate,
+                           'FP': self.FP_rate}
+        return classifier_dict.copy()
+
     def train(self):
         backup_acc = 0
         # Define loss function and optimizer
@@ -110,11 +135,10 @@ class AppleClassifier():
             self.model.cuda()
         optim = torch.optim.Adam(self.model.parameters(), lr=0.0001)
         self.model.train()
-
         print('starting training, finding the starting accuracy for random model of type', self.outputs)
         acc, TP, FP = self.evaluate(0.5)
         print(f'starting: accuracy - {acc}, TP rate - {TP}, FP rate - {FP}')
-        self.accs.append(acc)
+        self.accuracies.append(acc)
         self.TP_rate.append(TP)
         self.FP_rate.append(FP)
         self.losses.append(0)
@@ -151,7 +175,7 @@ class AppleClassifier():
             if acc > backup_acc:
                 self.best_model = copy.deepcopy(self.model)
                 backup_acc = acc
-            self.accs.append(acc)
+            self.accuracies.append(acc)
             self.losses.append(net_loss)
             self.steps.append(epoch)
             self.TP_rate.append(TP)
@@ -309,19 +333,34 @@ class AppleClassifier():
         self.model.train()
         return acc, TP, FP
 
+    def evaluate_secondary(self):
+        self.model.eval()
+        hidden_layer = self.model.init_hidden(1)
+        outputs = []
+        for x, y in self.test_data[self.test_range[0]:self.test_range[1]]:
+            x = torch.unsqueeze(x, 0)
+            x = torch.unsqueeze(x, 0)
+            out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
+            outputs.append(out.to('cpu').detach().numpy()[0])
+        outputs[124:] = AppleClassifier.moving_average(outputs,125)
+        self.test_range[0] += 5000
+        self.test_range[1] += 5000
+        self.model.train()
+        return outputs
+
     @staticmethod
     def moving_average(x, w):
         return np.convolve(x, np.ones(w), 'valid') / w
 
     def save_model(self, filename=None):
         if filename is None:
-            filename = self.outputs + '_' + self.model_type + '_model_' +\
+            filename = './models/' + self.outputs + '_' + self.model_type + '_model_' +\
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
         torch.save(self.best_model, filename + 'pt')
 
     def save_data(self, filename=None):
         if filename is None:
-            filename = self.outputs + '_' + self.model_type + '_data_' +\
+            filename = './data/' + self.outputs + '_' + self.model_type + '_data_' +\
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,

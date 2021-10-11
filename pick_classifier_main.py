@@ -6,30 +6,17 @@ Created on Sun Oct  3 16:54:09 2021
 @author: orochi
 """
 
-import copy
-import os
-import time
-
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-
-import csv
 import torch
-import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
-
-from sklearn.preprocessing import MinMaxScaler
-from RNNs import GRUNet, LSTMNet
 import pickle as pkl
-import datetime
-from train_RNN import train, perform_ablation
 from csv_process import process_data
 import argparse
-from evaluate_RNN import evaluate_with_delay, evaluate_secondary
+from AppleClassifier import AppleClassifier
+from Ablation import perform_ablation
+from torch.utils.data import TensorDataset, DataLoader
 
-
-def build_dataloaders(database, args):
+def build_dataset(database, args):
     train_trim_inds = database['train_reduce_inds']
     test_trim_inds = database['test_reduce_inds']
     if args.reduced:
@@ -43,25 +30,23 @@ def build_dataloaders(database, args):
         train_label = database['train_label']
         test_label = database['test_label']
 
-    if goal.lower() == 'grasp':
+    if args.goal.lower() == 'grasp':
         train_label = train_label[:, -2]
         test_label = test_label[:, -2]
-    elif goal.lower() == 'contact':
+    elif args.goal.lower() == 'contact':
         train_label = train_label[:, 0:6]
         test_label = test_label[:, 0:6]
-    elif goal.lower() == 'slip':
+    elif args.goal.lower() == 'slip':
         train_label = train_label[:, -3]
         test_label = test_label[:, -3]
-    elif goal.lower() == 'drop':
+    elif args.goal.lower() == 'drop':
         train_label = train_label[:, -1]
         test_label = test_label[:, -1]
 
     train_data = TensorDataset(torch.from_numpy(train_state), torch.from_numpy(train_label))
     test_data = TensorDataset(torch.from_numpy(test_state), torch.from_numpy(test_label))
-    train_loader = DataLoader(train_data, shuffle=False, batch_size=args.batch_size, drop_last=True)
-    test_loader = DataLoader(test_data, shuffle=False, batch_size=args.batch_size, drop_last=True)
 
-    return train_loader, test_loader
+    return train_data, test_data
 
 
 def setup_args(args=None):
@@ -69,7 +54,7 @@ def setup_args(args=None):
     returns: Full set of arguments to be parsed"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", default="LSTM", type=str) # RNN used
-    parser.add_argument("--epochs", default=5) # num epochs trained for
+    parser.add_argument("--epochs", default=25) # num epochs trained for
     parser.add_argument("--layers", default=4, type=int) # num layers in RNN
     parser.add_argument("--hiddens", default=100, type=int) # num hidden nodes per layer
     parser.add_argument("--drop_prob", default=0.2, type=float) # drop probability
@@ -99,59 +84,49 @@ if __name__ == "__main__":
     if args.reprocess:
         process_data(args.data_path)
         file = open('apple_dataset.pkl', 'rb')
-        pick_data = pkl.load(data_file, file)
+        pick_data = pkl.load(file)
         file.close()
     else:
         try:
             file = open('apple_dataset.pkl', 'rb')
-            pick_data = pkl.load(data_file, file)
+            pick_data = pkl.load(file)
             file.close()
         except FileNotFoundError:
             process_data(args.data_path)
             file = open('apple_dataset.pkl', 'rb')
-            pick_data = pkl.load(data_file, file)
+            pick_data = pkl.load(file)
             file.close()
 
-    # Load processed data into dataloader as required by goal argument
-    train_loader, test_loader = build_dataloaders(pick_data, args)
+    # Load processed data into dataset as required by goal argument
+    train_data, test_data = build_dataset(pick_data, args)
 
     # Load policy if it exists, if not train a new one
-    loaded_policies = []
+    loaded_classifiers = []
     loaded_dicts = []
     if args.policy is None or args.compare_policy:
-        trained_RNN, accuracies, losses, steps, TP_rate, FP_rate = train(train_loader, test_loader, eval_points = len(reduced_test_state), epochs=25,
-                                                    model_type='LSTM', output='slip')
+        classifier = AppleClassifier(train_data, test_data, vars(args))
         print('model finished, saving now')
-        name = args.model_type + "_" + args.goal + "_" + datetime.datetime.now().strftime("%m_%d_%y_%H%M")
-        torch.save(trained_RNN, name + '.pt')
-        RNN_dict = {'acc': accuracies, 'loss': losses, 'steps': steps, 'TP': TP_rate, 'FP': FP_rate, 'name': name}
-        file = open(name + '.pkl', 'wb')
-        pkl.dump(grasp_lstm_dict, file)
-        file.close()
+        classifier.save_data()
+        classifier.save_model()
     else:
-        trained_RNN = torch.load(args.policy + '.pt')
-        trained_RNN.eval()
-        file = open(name + '.pkl', 'rb')
-        RNN_dict = pkl.load(file)
-        file.close()
-    loaded_policies.append(trained_RNN)
-    loaded_dicts.append(RNN_dict)
+        classifier = AppleClassifier(train_data, test_data, vars(args))
+        classifier.load_model(args.policy + '.pt')
+        classifier.load_model_data(args.policy + '.pkl')
+    loaded_classifiers.append(classifier)
+    loaded_dicts(classifier.get_data_dict())
     if args.compare_policy:
-        old_trained_policy = torch.load(args.policy)
-        old_trained_policy.eval()
-        loaded_policies.append(old_trained_policy)
-        file = open(name + '.pkl', 'rb')
-        old_dict = pkl.load(file)
-        file.close()
-        loaded_dicts.append(old_dict)
-
+        old_classifier = AppleClassifier(train_data, test_data, vars(args))
+        old_classifier.load_model(args.policy + '.pt')
+        old_classifier.load_model_data(args.policy + '.pkl')
+        loaded_classifiers.append(old_classifier)
+        loaded_dicts.append(old_classifier.get_data_dict())
     figure_count = 1
     # Plot accuracy over time if desired
     if args.plot_acc:
-        print('Plotting classifier accuracy over time')
+        print('Plotting classreduced_train_state, reduced_test_state, reduced_train_label, reduced_test_labelifier accuracy over time')
         legend = []
+        acc_plot = plt.figure(figure_count)
         for data in loaded_dicts:
-            acc_plot = plt.figure(figure_count)
             plt.plot(data['steps'], data['acc'])
             legend.append(data['legend'])
         plt.legend(legend)
@@ -163,8 +138,8 @@ if __name__ == "__main__":
     if args.plot_loss:
         legend = []
         print('Plotting classifier loss over time')
+        loss_plot = plt.figure(figure_count)
         for data in loaded_dicts:
-            acc_plot = plt.figure(figure_count)
             plt.plot(data['steps'], data['loss'])
             legend.append(data['legend'])
         plt.legend(legend)
@@ -176,8 +151,8 @@ if __name__ == "__main__":
     if args.plot_TP_FP:
         legend = []
         print('Plotting true positive and false positive rate over time')
+        TPFP_plot = plt.figure(figure_count)
         for data in loaded_dicts:
-            acc_plot = plt.figure(figure_count)
             plt.plot(data['steps'], data['TP'])
             plt.plot(data['steps'], data['FP'])
             legend.append('TP'+data['legend'])
@@ -186,127 +161,63 @@ if __name__ == "__main__":
         plt.xlabel('Steps')
         plt.ylabel('Accuracy')
         figure_count += 1
-        
+
     # Plot an ROC if desired
     if args.plot_ROC:
         legend = []
         print('Plotting an ROC curve with threshold increments of 0.05')
-        for policy in loaded_policies:
+        count = 0
+        ROC_plot = plt.figure(figure_count)
+        for policy in loaded_classifiers:
+            accs = []
+            TPs = []
+            FPs = []
             for i in range(21):
-                TODO finish writing this code and the code for single example
-                acc, TP, FP = evaluate_with_delay(policy, reduced_test_loader, len(reduced_test_state), 1,
-                                              threshold=i * 0.05)#, input_dim=33)
-                acc1, TP1, FP1 = evaluate(trained_grasp_lstm, reduced_test_loader_grasp_success, len(reduced_test_state), 1, threshold=i * 0.05)#, input_dim=33)
-                accs.append(acc)
+                _, TP, FP = policy.evaluate_with_delay(threshold=i * 0.05)
                 TPs.append(TP)
                 FPs.append(FP)
-                accs1.append(acc1)
-                TPs1.append(TP1)
-                FPs1.append(FP1)
-            acc_plot = plt.figure(figure_count)
-            plt.plot(data['steps'], data['TP'])
-            plt.plot(data['steps'], data['FP'])
-            legend.append('TP'+data['legend'])
-            legend.append('FP'+data['legend'])
+            print(f'policy {count} finished')
+            plt.plot(FP, TP)
+            legend.append('Policy_'+str(count))
+            count += 1
         plt.legend(legend)
-        plt.xlabel('Steps')
-        plt.ylabel('Accuracy')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
         figure_count += 1
-    
+
     # Visualize all plots made
     print('Displaying all plots other than single episode')
-    plt.show()  
-    
+    plt.show()
+
     # Plot single example if desired
     if args.plot_example:
-        flag = True
+        legend = ['Z Force', 'Correct Output']
+        print('Plotting single episode')
         count = 0
-        while flag:
-            reduced_plot_state = reduced_test_state[count*5000:(count+1)*5000]
-            reduced_plot_label = reduced_test_label[count*5000:(count+1)*5000]
-            outputs = evaluate_secondary(trained_grasp_lstm, torch.from_numpy(reduced_plot_state), reduced_plot_label[:, -2])
-            outputs = np.array(outputs)
-            outputs = outputs[:, 0]
-            outputs[124:] = moving_average(outputs, 125)
-            rounded_outputs = []
-            lstm_outputs = np.array(outputs)
-            for i in range(len(lstm_outputs)):
-                rounded_outputs.append((lstm_outputs[i] > t_hold) + 0.05)
-            xaxis = np.array(range(len(reduced_plot_state)))/500
-            plt.figure(figure_count)
-            plt.plot(xaxis, reduced_plot_state[:, -4]/20, linewidth=2)
-            plt.scatter(xaxis, rounded_outputs, marker="x", c='orange')
-            plt.scatter(xaxis, lstm_outputs, marker="+", c='red')
-            plt.scatter(xaxis, reduced_plot_label[:, -2], c='green')
-            plt.legend(['Z Force', 'LSTM labels', 'LSTM Output', 'Correct Output'])
+        single_episode_flag = True
+        while single_episode_flag:
+            single_episode_plot = plt.figure(figure_count)
+            plt.plot(range(policy.visualization_range[1]-policy.visualization_range[0]), policy.test_data.tensors[0][policy.visualization_range[0]:policy.visualization_range[1], -4]/20, linewidth=2)
+            plt.scatter(range(policy.visualization_range[1]-policy.visualization_range[0]), policy.test_data.tensors[1][policy.visualization_range[0]:policy.visualization_range[1]], c='green')
+            for policy in loaded_classifiers:
+                outputs = policy.evaluate_secondary()
+                legend.append('Policy '+str(count)+' raw output')
+                legend.append('Policy '+str(count)+' rounded output')
+                count += 1
+                rounded_outputs = []
+                for i in range(len(outputs)):
+                    rounded_outputs.append((outputs[i] > 0.5) + 0.05)
+                plt.scatter(range(len(outputs)), outputs, marker="+")
+                plt.scatter(range(len(outputs)), rounded_outputs, marker="x")
+            plt.legend(legend)
             plt.show()
+            figure_count += 1
             flag_choice = input('generate another plot? y/n')
             if flag_choice.lower() == 'n':
-                flag = False
+                single_episode_flag = False
             count += 1
             figure_count += 1
 
     # Perform ablation on feature groups if desired
     if args.ablate:
-        perform_ablation(reduced_train_state, reduced_test_state, reduced_train_label, reduced_test_label)
-
-# perform_ablation(reduced_train_state, reduced_test_state, reduced_train_label, reduced_test_label)
-
-# trained_slip_lstm, accuracies, losses, steps, TP_rate, FP_rate = train(reduced_train_loader_slip, reduced_test_loader_slip, eval_points = len(reduced_test_state), epochs=25,
-#                                                     model_type='LSTM', output='slip')
-# print('model 1 finished, saving now')
-# torch.save(trained_slip_lstm, 'slip_lstm_' + datetime.datetime.now().strftime("%m_%d_%y_%H%M") + '.pt')
-# grasp_lstm_dict = {'acc': accuracies, 'loss': losses, 'steps': steps, 'TP': TP_rate, 'FP': FP_rate}
-# file = open('slip_lstm_data' + datetime.datetime.now().strftime("%m_%d_%y_%H%M") + '.pkl', 'wb')
-# pkl.dump(grasp_lstm_dict, file)
-# file.close()
-
-
-# trained_grasp_lstm, accuracies, losses, steps, TP_rate, FP_rate = train(reduced_train_loader_grasp_success,reduced_test_loader_grasp_success,len(reduced_test_state),epochs=75,model_type='LSTM',output='grasp')#,input_dim=33)
-# print('model 2 finished, saving now')
-# torch.save(trained_grasp_lstm,'grasp_lstm_'+datetime.datetime.now().strftime("%m_%d_%y_%H%M")+'.pt')
-# grasp_lstm_dict = {'acc': accuracies, 'loss': losses, 'steps': steps, 'TP': TP_rate, 'FP': FP_rate}
-# file = open('grasp_lstm_data'+datetime.datetime.now().strftime("%m_%d_%y_%H%M")+'.pkl', 'wb')
-# pkl.dump(grasp_lstm_dict, file)
-# file.close()
-#
-# trained_drop_lstm, accuracies, losses, steps, TP_rate, FP_rate = train(reduced_train_loader_drop,reduced_test_loader_drop,len(reduced_test_state),epochs=25,model_type='LSTM',output='drop')
-# print('model 4 finished, saving now')
-# torch.save(trained_drop_lstm, 'contact_lstm_'+datetime.datetime.now().strftime("%m_%d_%y_%H%M")+'.pt')
-# grasp_lstm_dict={'acc': accuracies, 'loss': losses, 'steps': steps, 'TP': TP_rate, 'FP': FP_rate}
-# file = open('drop_lstm_data'+datetime.datetime.now().strftime("%m_%d_%y_%H%M")+'.pkl','wb')
-# pkl.dump(grasp_lstm_dict, file)
-# file.close()
-#
-# trained_contact_lstm, accuracies, losses, steps, TP_rate, FP_rate = train(reduced_train_loader_contact,reduced_test_loader_contact,len(reduced_test_state),epochs=25,model_type='LSTM',output='contact')
-# print('model 3 finished, saving now')
-# torch.save(trained_contact_lstm, 'contact_lstm_'+datetime.datetime.now().strftime("%m_%d_%y_%H%M")+'.pt')
-# grasp_lstm_dict={'acc': accuracies, 'loss': losses, 'steps': steps, 'TP': TP_rate, 'FP': FP_rate}
-# file = open('contact_lstm_data'+datetime.datetime.now().strftime("%m_%d_%y_%H%M")+'.pkl', 'wb')
-# pkl.dump(grasp_lstm_dict, file)
-# file.close()
-
-
-# plt.plot(np.array(steps),accuracies)
-# plt.plot(np.array(grasp_steps),grasp_accuracies)
-# plt.legend(['LSTM','GRU'])
-# plt.xlabel('Steps')
-# plt.ylabel('Accuracy')
-# plt.show()
-#
-# plt.plot(np.array(gru_steps),gru_accuracies)
-# plt.plot(np.array(stem_steps),stem_accuracies)
-# plt.legend(['Quaternion Loss','Axis Angle Loss'])
-# plt.xlabel('Epochs')
-# plt.ylabel('Average Rotation Angle Error')
-# plt.show()
-
-#
-# gru_outputs=evaluate_secondary(trained_grasp_gru,test_state,test_label)
-# for i in range(len(gru_outputs)):
-#    gru_outputs[i] = gru_outputs[i].to('cpu').detach().numpy()[0]
-#    gru_outputs[i] = np.argmax(gru_outputs[i])
-# plt.scatter(range(len(test_label)),test_label)
-# plt.scatter(range(len(gru_outputs)),gru_outputs)
-# plt.legend(['correct labels','gru labels'])
-# plt.show()
+        perform_ablation(train_data, test_data, args)
