@@ -14,7 +14,8 @@ import torch
 def moving_average(x, w):
     return np.convolve(x, np.ones(w), 'valid') / w
 
-def evaluate(model, test_loader, num_points, network_type, input_dim=51, threshold = 0.5):
+
+def evaluate(model, test_loader, num_points, network_type, input_dim=51, threshold=0.5):
     start = time.time()
     model.eval()
     hidden_layer = model.init_hidden(5000)
@@ -88,7 +89,8 @@ def evaluate(model, test_loader, num_points, network_type, input_dim=51, thresho
     model.train()
     return acc, TP, FP
 
-def evaluate_with_delay(model, test_loader, num_points, network_type, input_dim=51, threshold = 0.5):
+
+def evaluate_with_delay(model, test_loader, num_points, network_type, input_dim=51, threshold=0.5):
     start = time.time()
     model.eval()
     hidden_layer = model.init_hidden(5000)
@@ -127,9 +129,9 @@ def evaluate_with_delay(model, test_loader, num_points, network_type, input_dim=
             else:
                 acc += 1
     elif network_type == 1:
-        output_data = outputs[:,0]
-        test_labels = test_labels[:,0]
-        output_data[124:] = moving_average(output_data,125)
+        output_data = outputs[:, 0]
+        test_labels = test_labels[:, 0]
+        output_data[124:] = moving_average(output_data, 125)
         output_data = output_data > threshold
         output_data = output_data.astype(int)
         temp = output_data - test_labels
@@ -163,6 +165,7 @@ def evaluate_with_delay(model, test_loader, num_points, network_type, input_dim=
             acc += min(temp, abs(temp - 2 * 3.14159))
     model.train()
     return acc, TP, FP
+
 
 def evaluate_secondary(model, test_data, test_labels):
     model.eval()

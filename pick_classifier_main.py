@@ -16,6 +16,7 @@ from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
 from torch.utils.data import TensorDataset, DataLoader
 
+
 def build_dataset(database, args):
     train_trim_inds = database['train_reduce_inds']
     test_trim_inds = database['test_reduce_inds']
@@ -42,35 +43,40 @@ def build_dataset(database, args):
     elif args.goal.lower() == 'drop':
         train_label = train_label[:, -1]
         test_label = test_label[:, -1]
-
-    train_data = TensorDataset(torch.from_numpy(train_state), torch.from_numpy(train_label))
-    test_data = TensorDataset(torch.from_numpy(test_state), torch.from_numpy(test_label))
-
-    return train_data, test_data
+    train_dataset = TensorDataset(torch.from_numpy(train_state), torch.from_numpy(train_label))
+    test_dataset = TensorDataset(torch.from_numpy(test_state), torch.from_numpy(test_label))
+    return train_dataset, test_dataset
 
 
 def setup_args(args=None):
     """ Set important variables based on command line arguments OR passed on argument values
     returns: Full set of arguments to be parsed"""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_type", default="LSTM", type=str) # RNN used
-    parser.add_argument("--epochs", default=25) # num epochs trained for
-    parser.add_argument("--layers", default=4, type=int) # num layers in RNN
-    parser.add_argument("--hiddens", default=100, type=int) # num hidden nodes per layer
-    parser.add_argument("--drop_prob", default=0.2, type=float) # drop probability
-    parser.add_argument("--reduced", default=True, type=bool) # flag indicating to reduce data to only grasp part
-    parser.add_argument("--data_path", default="/media/avl/StudyData/ApplePicking Data/2 - Apple Proxy with spherical approach/", type=str)          # path to unprocessed data
-    parser.add_argument("--policy", default=None, type=str) # filepath to trained policy
-    parser.add_argument("--ablate", default=False, type=bool) # flag to determine if ablation should be run
-    parser.add_argument("--plot_acc", default=False, type=bool) # flag to determine if we want to plot the eval acc over epochs
-    parser.add_argument("--plot_loss", default=False, type=bool) # flag to determine if we want to plot the loss over epochs
-    parser.add_argument("--plot_ROC", default=False, type=bool) # flag to determine if we want to plot an ROC
-    parser.add_argument("--plot_TP_FP", default=False, type=bool) # flag to determine if we want to plot the TP and FP over epochs
-    parser.add_argument("--plot_example", default=False, type=bool) # flag to determine if we want to plot an episode and the networks perfromance
-    parser.add_argument("--goal", default="grasp", type=str) # desired output of the lstm
-    parser.add_argument("--reprocess", default=False, type=bool) # bool to manually reprocess data if changed
-    parser.add_argument("--compare_policy", default=False, type=bool) # bool to train new policy and compare to old policy in all plots
-    parser.add_argument("--batch_size", default=5000, type=bool) # number of points in a batch during training
+    parser.add_argument("--model_type", default="LSTM", type=str)  # RNN used
+    parser.add_argument("--epochs", default=25, type=int)  # num epochs trained for
+    parser.add_argument("--layers", default=4, type=int)  # num layers in RNN
+    parser.add_argument("--hiddens", default=100, type=int)  # num hidden nodes per layer
+    parser.add_argument("--drop_prob", default=0.2, type=float)  # drop probability
+    parser.add_argument("--reduced", default=True, type=bool)  # flag indicating to reduce data to only grasp part
+    parser.add_argument("--data_path",
+                        default="/media/avl/StudyData/Apple Pick Data/Apple Proxy Picks/2 - Apple Proxy with spherical approach/",
+                        type=str)  # path to unprocessed data
+    parser.add_argument("--policy", default=None, type=str)  # filepath to trained policy
+    parser.add_argument("--ablate", default=False, type=bool)  # flag to determine if ablation should be run
+    parser.add_argument("--plot_acc", default=False,
+                        type=bool)  # flag to determine if we want to plot the eval acc over epochs
+    parser.add_argument("--plot_loss", default=False,
+                        type=bool)  # flag to determine if we want to plot the loss over epochs
+    parser.add_argument("--plot_ROC", default=False, type=bool)  # flag to determine if we want to plot an ROC
+    parser.add_argument("--plot_TP_FP", default=False,
+                        type=bool)  # flag to determine if we want to plot the TP and FP over epochs
+    parser.add_argument("--plot_example", default=False,
+                        type=bool)  # flag to determine if we want to plot an episode and the networks perfromance
+    parser.add_argument("--goal", default="grasp", type=str)  # desired output of the lstm
+    parser.add_argument("--reprocess", default=False, type=bool)  # bool to manually reprocess data if changed
+    parser.add_argument("--compare_policy", default=False,
+                        type=bool)  # bool to train new policy and compare to old policy in all plots
+    parser.add_argument("--batch_size", default=5000, type=int)  # number of points in a batch during training
 
     args = parser.parse_args()
     return args
@@ -105,6 +111,7 @@ if __name__ == "__main__":
     loaded_dicts = []
     if args.policy is None or args.compare_policy:
         classifier = AppleClassifier(train_data, test_data, vars(args))
+        classifier.train()
         print('model finished, saving now')
         classifier.save_data()
         classifier.save_model()
@@ -113,7 +120,7 @@ if __name__ == "__main__":
         classifier.load_model(args.policy + '.pt')
         classifier.load_model_data(args.policy + '.pkl')
     loaded_classifiers.append(classifier)
-    loaded_dicts(classifier.get_data_dict())
+    loaded_dicts.append(classifier.get_data_dict())
     if args.compare_policy:
         old_classifier = AppleClassifier(train_data, test_data, vars(args))
         old_classifier.load_model(args.policy + '.pt')
@@ -123,15 +130,16 @@ if __name__ == "__main__":
     figure_count = 1
     # Plot accuracy over time if desired
     if args.plot_acc:
-        print('Plotting classreduced_train_state, reduced_test_state, reduced_train_label, reduced_test_labelifier accuracy over time')
+        print('Plotting classifier accuracy over time')
         legend = []
         acc_plot = plt.figure(figure_count)
         for data in loaded_dicts:
             plt.plot(data['steps'], data['acc'])
-            legend.append(data['legend'])
+            legend.append(data['name'])
         plt.legend(legend)
         plt.xlabel('Steps')
         plt.ylabel('Accuracy')
+        plt.title('Accuracy Curve')
         figure_count += 1
 
     # Plot loss over time if desired
@@ -141,10 +149,11 @@ if __name__ == "__main__":
         loss_plot = plt.figure(figure_count)
         for data in loaded_dicts:
             plt.plot(data['steps'], data['loss'])
-            legend.append(data['legend'])
+            legend.append(data['name'])
         plt.legend(legend)
         plt.xlabel('Steps')
-        plt.ylabel('Accuracy')
+        plt.ylabel('Loss')
+        plt.title('Loss Curve')
         figure_count += 1
 
     # Plot TP and FP rate over time if desired
@@ -155,11 +164,12 @@ if __name__ == "__main__":
         for data in loaded_dicts:
             plt.plot(data['steps'], data['TP'])
             plt.plot(data['steps'], data['FP'])
-            legend.append('TP'+data['legend'])
-            legend.append('FP'+data['legend'])
+            legend.append('TP' + data['name'])
+            legend.append('FP' + data['name'])
         plt.legend(legend)
         plt.xlabel('Steps')
-        plt.ylabel('Accuracy')
+        plt.ylabel('True and False Positive Rate')
+        plt.title('True and False Positive Rate')
         figure_count += 1
 
     # Plot an ROC if desired
@@ -177,12 +187,16 @@ if __name__ == "__main__":
                 TPs.append(TP)
                 FPs.append(FP)
             print(f'policy {count} finished')
-            plt.plot(FP, TP)
-            legend.append('Policy_'+str(count))
+            plt.plot(FPs, TPs)
+            legend.append('Policy_' + str(count))
             count += 1
+        baseline = [0, 1]
+        legend.append('Random Baseline')
+        plt.plot(baseline, baseline, linestyle='--')
         plt.legend(legend)
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
+        plt.title('ROC')
         figure_count += 1
 
     # Visualize all plots made
@@ -197,18 +211,27 @@ if __name__ == "__main__":
         single_episode_flag = True
         while single_episode_flag:
             single_episode_plot = plt.figure(figure_count)
-            plt.plot(range(policy.visualization_range[1]-policy.visualization_range[0]), policy.test_data.tensors[0][policy.visualization_range[0]:policy.visualization_range[1], -4]/20, linewidth=2)
-            plt.scatter(range(policy.visualization_range[1]-policy.visualization_range[0]), policy.test_data.tensors[1][policy.visualization_range[0]:policy.visualization_range[1]], c='green')
+            plot_bounds = [loaded_classifiers[0].visualization_range[0], loaded_classifiers[0].visualization_range[1]]
+            plt.plot(range(plot_bounds[0], plot_bounds[1]),
+                     test_data.tensors[0][
+                     plot_bounds[0]:plot_bounds[1],
+                     -4] / 20,
+                     linewidth=2)
+            plt.scatter(
+                range(plot_bounds[0], plot_bounds[1]),
+                test_data.tensors[1][
+                plot_bounds[0]:plot_bounds[1]],
+                c='green')
             for policy in loaded_classifiers:
                 outputs = policy.evaluate_secondary()
-                legend.append('Policy '+str(count)+' raw output')
-                legend.append('Policy '+str(count)+' rounded output')
+                legend.append('Policy ' + str(count) + ' raw output')
+                legend.append('Policy ' + str(count) + ' rounded output')
                 count += 1
                 rounded_outputs = []
                 for i in range(len(outputs)):
                     rounded_outputs.append((outputs[i] > 0.5) + 0.05)
-                plt.scatter(range(len(outputs)), outputs, marker="+")
-                plt.scatter(range(len(outputs)), rounded_outputs, marker="x")
+                plt.scatter(range(plot_bounds[0], plot_bounds[1]), outputs, marker="+")
+                plt.scatter(range(plot_bounds[0], plot_bounds[1]), rounded_outputs, marker="x")
             plt.legend(legend)
             plt.show()
             figure_count += 1

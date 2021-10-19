@@ -42,7 +42,7 @@ class LSTMNet(nn.Module):
         super(LSTMNet, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-        
+
         self.grasp_flag = grasp_flag
         self.lstm = nn.LSTM(input_dim, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
         self.fc = nn.Linear(hidden_dim, output_dim)

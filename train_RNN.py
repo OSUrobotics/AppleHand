@@ -201,4 +201,3 @@ def perform_ablation(reduced_train_state, reduced_test_state, reduced_train_labe
     file = open('grasp_ablation_data' + datetime.datetime.now().strftime("%m_%d_%y_%H%M") + '.pkl', 'wb')
     pkl.dump(grasp_ablation_dict, file)
     file.close()
-

@@ -82,7 +82,7 @@ class AppleClassifier():
         self.FP_rate = []
         self.losses = []
         self.steps = []
-        self.visualization_range=[0,5000]
+        self.visualization_range = [0, 1000]
         # Instantiate the model
         if model is not None:
             self.model = []
@@ -107,6 +107,8 @@ class AppleClassifier():
                                     drop_last=True)
         self.test_size = len(test_dataset)
         self.train_size = len(train_dataset)
+        print(len(self.test_data))
+        print(self.test_size,self.train_size)
 
     def load_model(self, filepath):
         self.model = torch.load(filepath + '.pt')
@@ -125,7 +127,7 @@ class AppleClassifier():
     def get_data_dict(self):
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,
-                           'FP': self.FP_rate}
+                           'FP': self.FP_rate, 'name': self.outputs + '_' + self.model_type}
         return classifier_dict.copy()
 
     def train(self):
@@ -149,8 +151,8 @@ class AppleClassifier():
             net_loss = 0
             epoch_loss = 0
             step = 0
-            for x, label in self.train_loader:
-                x = torch.reshape(x, (5000, 1, self.input_dim))
+            for x, label in self.train_data:
+                x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
                 if self.model_type == "GRU":
                     hiddens = hiddens.data
                 else:
@@ -160,7 +162,7 @@ class AppleClassifier():
                     if torch.isnan(param).any():
                         print('shit went sideways')
                 if self.network_type == 1:
-                    pred = torch.reshape(pred, (5000,))
+                    pred = torch.reshape(pred, (self.batch_size,))
                     loss = self.loss_fn(pred, label.to(self.device).float())
                 else:
                     loss = self.loss_fn(pred.to('cpu'), label.to('cpu').float())
@@ -184,9 +186,9 @@ class AppleClassifier():
         print(f'Finished training, best recorded model had acc = {backup_acc}')
 
     def evaluate(self, threshold=0.5):
-#        start = time.time()
+        #        start = time.time()
         self.model.eval()
-        hidden_layer = self.model.init_hidden(5000)
+        hidden_layer = self.model.init_hidden(self.batch_size)
         if self.network_type == 'aa':
             last_ind = 3
             outputs = np.zeros((self.test_size, 3))
@@ -206,8 +208,8 @@ class AppleClassifier():
         acc = 0
         count = 0
         for x, y in self.test_data:
-            x = torch.reshape(x, (5000, 1, self.input_dim))
-            y = torch.reshape(y, (5000, last_ind))
+            x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
+            y = torch.reshape(y, (self.batch_size, last_ind))
             hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
             mod = len(out)
@@ -244,13 +246,13 @@ class AppleClassifier():
             FP_diffs = np.count_nonzero(temp > 0)
             FN_diffs = np.count_nonzero(temp < 0)
             num_pos = np.count_nonzero(test_labels)
-            num_neg = self.test_size * 6 - num_pos 
+            num_neg = self.test_size * 6 - num_pos
             FP = FP_diffs / num_neg
             FN = FN_diffs / num_pos
             TP = 1 - FN
             diffs = np.count_nonzero(temp)
             acc = 1 - diffs / 6 / len(output_data)
-        else:  
+        else:
             for i in range(len(outputs)):
                 acc += sum(abs(outputs[i].to('cpu').detach().numpy()[0] - test_labels[i]))
                 acc += min(temp, abs(temp - 2 * 3.14159))
@@ -258,9 +260,9 @@ class AppleClassifier():
         return acc, TP, FP
 
     def evaluate_with_delay(self, threshold=0.5):
-#        start = time.time()
+        #        start = time.time()
         self.model.eval()
-        hidden_layer = self.model.init_hidden(5000)
+        hidden_layer = self.model.init_hidden(self.batch_size)
         if self.network_type == 'aa':
             last_ind = 3
             outputs = np.zeros((self.test_size, 3))
@@ -280,8 +282,8 @@ class AppleClassifier():
         acc = 0
         count = 0
         for x, y in self.test_data:
-            x = torch.reshape(x, (5000, 1, self.input_dim))
-            y = torch.reshape(y, (5000, last_ind))
+            x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
+            y = torch.reshape(y, (self.batch_size, last_ind))
             hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
             mod = len(out)
@@ -296,9 +298,9 @@ class AppleClassifier():
                 else:
                     acc += 1
         elif self.network_type == 1:
-            output_data = outputs[:,0]
-            test_labels = test_labels[:,0]
-            output_data[124:] = AppleClassifier.moving_average(output_data,125)
+            output_data = outputs[:, 0]
+            test_labels = test_labels[:, 0]
+            output_data[124:] = AppleClassifier.moving_average(output_data, 125)
             output_data = output_data > threshold
             output_data = output_data.astype(int)
             temp = output_data - test_labels
@@ -335,16 +337,21 @@ class AppleClassifier():
 
     def evaluate_secondary(self):
         self.model.eval()
-        hidden_layer = self.model.init_hidden(1)
+        hidden_layer = self.model.init_hidden(self.batch_size)
         outputs = []
-        for x, y in self.test_data[self.test_range[0]:self.test_range[1]]:
-            x = torch.unsqueeze(x, 0)
-            x = torch.unsqueeze(x, 0)
+        last_ind = 1
+        for x, y in self.test_data:
+            x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
+            y = torch.reshape(y, (self.batch_size, last_ind))
+            hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
-            outputs.append(out.to('cpu').detach().numpy()[0])
-        outputs[124:] = AppleClassifier.moving_average(outputs,125)
-        self.test_range[0] += 5000
-        self.test_range[1] += 5000
+            outputs.append(out.to('cpu').detach().numpy())
+        outputs = [item for sublist in outputs for item in sublist]
+        outputs = np.reshape(outputs, len(outputs))
+        outputs[124:] = AppleClassifier.moving_average(outputs, 125)
+        outputs = outputs[self.visualization_range[0]:self.visualization_range[1]]
+        self.visualization_range[0] += 1000
+        self.visualization_range[1] += 1000
         self.model.train()
         return outputs
 
@@ -354,13 +361,13 @@ class AppleClassifier():
 
     def save_model(self, filename=None):
         if filename is None:
-            filename = './models/' + self.outputs + '_' + self.model_type + '_model_' +\
+            filename = './models/' + self.outputs + '_' + self.model_type + '_model_' + \
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
-        torch.save(self.best_model, filename + 'pt')
+        torch.save(self.best_model, filename + '.pt')
 
     def save_data(self, filename=None):
         if filename is None:
-            filename = './data/' + self.outputs + '_' + self.model_type + '_data_' +\
+            filename = './data/' + self.outputs + '_' + self.model_type + '_data_' + \
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,
