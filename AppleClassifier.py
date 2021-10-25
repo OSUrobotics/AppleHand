@@ -30,7 +30,7 @@ class AppleClassifier():
         try:
             self.epochs = param_dict['epochs']
         except KeyError:
-            self.epochs = 5
+            self.epochs = 25
         try:
             self.model_type = param_dict['model_type']
         except KeyError:
@@ -107,28 +107,42 @@ class AppleClassifier():
                                     drop_last=True)
         self.test_size = len(test_dataset)
         self.train_size = len(train_dataset)
-        print(len(self.test_data))
-        print(self.test_size,self.train_size)
+        self.identifier = self.outputs
+        self.generate_ID()
 
     def load_model(self, filepath):
-        self.model = torch.load(filepath + '.pt')
+        self.model = torch.load('./models/'+filepath + '.pt')
         self.model.eval()
 
     def load_model_data(self, filepath):
-        file = open(filepath + '.pkl', 'rb')
+        file = open('./data/'+filepath + '.pkl', 'rb')
         temp_dict = pkl.load(file)
         file.close()
-        self.accuracies = temp_dict['accuracies']
-        self.TP_rate = temp_dict['TP_rate']
-        self.FP_rate = temp_dict['FP_rate']
-        self.losses = temp_dict['losses']
+        self.accuracies = temp_dict['acc']
+        self.TP_rate = temp_dict['TP']
+        self.FP_rate = temp_dict['FP']
+        self.losses = temp_dict['loss']
         self.steps = temp_dict['steps']
 
     def get_data_dict(self):
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,
-                           'FP': self.FP_rate, 'name': self.outputs + '_' + self.model_type}
+                           'FP': self.FP_rate, 'ID': self.identifier}
         return classifier_dict.copy()
+
+    def generate_ID(self):
+        if self.batch_size != 5000:
+            self.identifier = self.identifier + '_batch=' +str(self.batch_size)
+        if self.epochs != 25:
+            self.identifier = self.identifier +'_epochs='+str(self.epochs)
+        if self.hidden != 100:
+            self.identifier = self.identifier + '_hidden_nodes=' + str(self.hidden)
+        if self.input_dim !=51:
+            self.identifier = self.identifier + '_input_size=' + str(self.input_dim)
+        if self.layers != 4:
+            self.identifier = self.identifier + '_hidden_layers=' + str(self.layers)
+        if self.drop_prob != 0.2:
+            self.identifier = self.identifier + '_drop_probability=' + str(self.drop_prob)
 
     def train(self):
         backup_acc = 0
@@ -361,16 +375,16 @@ class AppleClassifier():
 
     def save_model(self, filename=None):
         if filename is None:
-            filename = './models/' + self.outputs + '_' + self.model_type + '_model_' + \
+            filename = './models/' + self.identifier + \
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
         torch.save(self.best_model, filename + '.pt')
 
     def save_data(self, filename=None):
         if filename is None:
-            filename = './data/' + self.outputs + '_' + self.model_type + '_data_' + \
+            filename = './data/' + self.identifier + \
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,
-                           'FP': self.FP_rate}
+                           'FP': self.FP_rate, 'ID': self.identifier}
         file = open(filename + '.pkl', 'wb')
         pkl.dump(classifier_dict, file)

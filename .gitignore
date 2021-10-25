@@ -1,3 +1,5 @@
 *.npy
 *.pkl
 *.pt
+__pycache__/
+.idea/

@@ -17,6 +17,11 @@ from Ablation import perform_ablation
 from torch.utils.data import TensorDataset, DataLoader
 
 
+def make_data_name(model_name):
+    ind = model_name.find('model')
+    return model_name[0:ind] + 'data' + model_name[ind+5:]
+
+
 def build_dataset(database, args):
     train_trim_inds = database['train_reduce_inds']
     test_trim_inds = database['test_reduce_inds']
@@ -117,14 +122,14 @@ if __name__ == "__main__":
         classifier.save_model()
     else:
         classifier = AppleClassifier(train_data, test_data, vars(args))
-        classifier.load_model(args.policy + '.pt')
-        classifier.load_model_data(args.policy + '.pkl')
+        classifier.load_model(args.policy)
+        classifier.load_model_data(make_data_name(args.policy))
     loaded_classifiers.append(classifier)
     loaded_dicts.append(classifier.get_data_dict())
     if args.compare_policy:
         old_classifier = AppleClassifier(train_data, test_data, vars(args))
-        old_classifier.load_model(args.policy + '.pt')
-        old_classifier.load_model_data(args.policy + '.pkl')
+        old_classifier.load_model(args.policy)
+        old_classifier.load_model_data(make_data_name(args.policy))
         loaded_classifiers.append(old_classifier)
         loaded_dicts.append(old_classifier.get_data_dict())
     figure_count = 1
@@ -135,7 +140,7 @@ if __name__ == "__main__":
         acc_plot = plt.figure(figure_count)
         for data in loaded_dicts:
             plt.plot(data['steps'], data['acc'])
-            legend.append(data['name'])
+            legend.append(data['ID'])
         plt.legend(legend)
         plt.xlabel('Steps')
         plt.ylabel('Accuracy')
@@ -148,8 +153,8 @@ if __name__ == "__main__":
         print('Plotting classifier loss over time')
         loss_plot = plt.figure(figure_count)
         for data in loaded_dicts:
-            plt.plot(data['steps'], data['loss'])
-            legend.append(data['name'])
+            plt.plot(data['steps'][1:], data['loss'][1:])
+            legend.append(data['ID'])
         plt.legend(legend)
         plt.xlabel('Steps')
         plt.ylabel('Loss')
@@ -164,8 +169,8 @@ if __name__ == "__main__":
         for data in loaded_dicts:
             plt.plot(data['steps'], data['TP'])
             plt.plot(data['steps'], data['FP'])
-            legend.append('TP' + data['name'])
-            legend.append('FP' + data['name'])
+            legend.append('TP_' + data['ID'])
+            legend.append('FP_' + data['ID'])
         plt.legend(legend)
         plt.xlabel('Steps')
         plt.ylabel('True and False Positive Rate')
@@ -180,15 +185,15 @@ if __name__ == "__main__":
         ROC_plot = plt.figure(figure_count)
         for policy in loaded_classifiers:
             accs = []
-            TPs = []
-            FPs = []
+            TPs = [1]
+            FPs = [1]
             for i in range(21):
                 _, TP, FP = policy.evaluate_with_delay(threshold=i * 0.05)
                 TPs.append(TP)
                 FPs.append(FP)
             print(f'policy {count} finished')
             plt.plot(FPs, TPs)
-            legend.append('Policy_' + str(count))
+            legend.append(policy.identifier)
             count += 1
         baseline = [0, 1]
         legend.append('Random Baseline')
@@ -216,7 +221,7 @@ if __name__ == "__main__":
                      test_data.tensors[0][
                      plot_bounds[0]:plot_bounds[1],
                      -4] / 20,
-                     linewidth=2)
+                     linewidth=2, c='red')
             plt.scatter(
                 range(plot_bounds[0], plot_bounds[1]),
                 test_data.tensors[1][
@@ -224,8 +229,8 @@ if __name__ == "__main__":
                 c='green')
             for policy in loaded_classifiers:
                 outputs = policy.evaluate_secondary()
-                legend.append('Policy ' + str(count) + ' raw output')
-                legend.append('Policy ' + str(count) + ' rounded output')
+                legend.append(policy.identifier + ' raw output')
+                legend.append(policy.identifier + ' rounded output')
                 count += 1
                 rounded_outputs = []
                 for i in range(len(outputs)):
