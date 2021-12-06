@@ -48,13 +48,13 @@ class AppleClassifier():
         except KeyError:
             self.drop_prob = 0.2
         try:
+            self.batch_size = min(param_dict['batch_size'], len(test_dataset))
+        except KeyError:
+            self.batch_size = min(5000, len(test_dataset))
+        try:
             self.input_dim = param_dict['input_dim']
         except KeyError:
-            self.input_dim = 51
-        try:
-            self.batch_size = param_dict['batch_size']
-        except KeyError:
-            self.batch_size = 5000
+            self.input_dim = len(train_dataset[0][0])
         try:
             self.outputs = param_dict['outputs']
         except KeyError:
@@ -76,6 +76,13 @@ class AppleClassifier():
             self.output_dim = 1
             self.loss_fn = nn.MSELoss()
             self.network_type = 1
+
+        self.train_data = DataLoader(train_dataset, shuffle=False,
+                                     batch_size=self.batch_size,
+                                     drop_last=True)
+        self.test_data = DataLoader(test_dataset, shuffle=False,
+                                    batch_size=self.batch_size,
+                                    drop_last=True)
 
         self.accuracies = []
         self.TP_rate = []
@@ -99,12 +106,7 @@ class AppleClassifier():
         else:
             self.device = torch.device("cpu")
         self.best_model = copy.deepcopy(self.model)
-        self.train_data = DataLoader(train_dataset, shuffle=False,
-                                     batch_size=self.batch_size,
-                                     drop_last=True)
-        self.test_data = DataLoader(test_dataset, shuffle=False,
-                                    batch_size=self.batch_size,
-                                    drop_last=True)
+
         self.test_size = len(test_dataset)
         self.train_size = len(train_dataset)
         self.identifier = self.outputs

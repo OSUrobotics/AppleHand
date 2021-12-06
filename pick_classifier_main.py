@@ -10,7 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import pickle as pkl
-from csv_process import process_data
+from raw_csv_process import process_data
+from simple_csv_process import simple_process_data
 import argparse
 from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
@@ -48,6 +49,7 @@ def build_dataset(database, args):
     elif args.goal.lower() == 'drop':
         train_label = train_label[:, -1]
         test_label = test_label[:, -1]
+    print(np.count_nonzero(test_label))
     train_dataset = TensorDataset(torch.from_numpy(train_state), torch.from_numpy(train_label))
     test_dataset = TensorDataset(torch.from_numpy(test_state), torch.from_numpy(test_label))
     return train_dataset, test_dataset
@@ -93,21 +95,32 @@ if __name__ == "__main__":
 
     # Load processed data if it exists and process csvs if it doesn't
     if args.reprocess:
-        process_data(args.data_path)
-        file = open('apple_dataset.pkl', 'rb')
-        pick_data = pkl.load(file)
-        file.close()
+        try:
+            simple_process_data(args.data_path)
+            file = open('apple_dataset.pkl', 'rb')
+            pick_data = pkl.load(file)
+            file.close()
+        except:
+            process_data(args.data_path)
+            file = open('apple_dataset.pkl', 'rb')
+            pick_data = pkl.load(file)
+            file.close()
     else:
         try:
             file = open('apple_dataset.pkl', 'rb')
             pick_data = pkl.load(file)
             file.close()
         except FileNotFoundError:
-            process_data(args.data_path)
-            file = open('apple_dataset.pkl', 'rb')
-            pick_data = pkl.load(file)
-            file.close()
-
+            try:
+                simple_process_data(args.data_path)
+                file = open('apple_dataset.pkl', 'rb')
+                pick_data = pkl.load(file)
+                file.close()
+            except:
+                process_data(args.data_path)
+                file = open('apple_dataset.pkl', 'rb')
+                pick_data = pkl.load(file)
+                file.close()
     # Load processed data into dataset as required by goal argument
     train_data, test_data = build_dataset(pick_data, args)
 
