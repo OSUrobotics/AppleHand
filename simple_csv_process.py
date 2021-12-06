@@ -20,6 +20,7 @@ import pickle as pkl
 import csv
 from raw_csv_process import unpack_arr
 
+
 def simple_process_data(path):
     """
     Reads apple picking data saved in the given path, removes datapoints
@@ -30,42 +31,46 @@ def simple_process_data(path):
     success_keys = ['s', 'y', 'yes', 'success']
     fail_keys = ['f', 'n', 'no', 'fail']
     folder_names = ['successful_picks', 'failed_picks']
+    big_names = ['training_set', 'test_set']
     pcount = 0
     ncount = 0
-    episode_times = [[-1, -1]]
-    states = []
-    labels = []
+    episode_times = {'training_set':[[-1, -1]], 'test_set':[[-1, -1]]}
+    states = {'training_set': [], 'test_set': []}
+    labels = {'training_set': [], 'test_set': []}
     lens = []
     # This loop iterates through all the folders in the path folder, which contains different folders for each set of starting noises
-    for folder in folder_names:
-        csv_files = os.listdir(path + '/' + folder)
-
-        # This loop iterates through the folders in the selected folder in path. These folders contain csvs with all the
-        # episode data and have the same pick number as the csv label file in the folder above
-        for datafile in csv_files:
-            indicies = [len(states), -1]
-            print('opening up name', datafile)
-            with open(path + '/' + folder + '/' + datafile, 'r') as csv_file:
-                reader = csv.reader(csv_file)
-                temp = False
-                for row in reader:
-                    if temp:
-                        states.append(row[1:])
-                    else:
-                        temp = True
-            indicies[1] = len(states)
-            if folder == 'successful_picks':
-                labels.extend([[1,1,1,1,1,1,1]] * (indicies[1] - indicies[0]))
-                pcount += 1
-            else:
-                labels.extend([[0,0,0,0,0,0,0]] * (indicies[1] - indicies[0]))
-                ncount += 1
-            episode_times.append(indicies.copy())
+    for top_folder in big_names:
+        for folder in folder_names:
+            csv_files = os.listdir(path + '/' + top_folder + '/' + folder)
+            # This loop iterates through the folders in the selected folder in path. These folders contain csvs with all the
+            # episode data and have the same pick number as the csv label file in the folder above
+            for datafile in csv_files:
+                indicies = [len(states[top_folder]), -1]
+                print('opening up name', datafile)
+                with open(path + '/' + top_folder + '/' + folder + '/' + datafile, 'r') as csv_file:
+                    reader = csv.reader(csv_file)
+                    temp = False
+                    for row in reader:
+                        if temp:
+                            states[top_folder].append(row[1:])
+                        else:
+                            temp = True
+                indicies[1] = len(states[top_folder])
+                if folder == 'successful_picks':
+                    labels[top_folder].extend([[1, 1, 1, 1, 1, 1, 1]] * (indicies[1] - indicies[0]))
+                    pcount += 1
+                else:
+                    labels[top_folder].extend([[0, 0, 0, 0, 0, 0, 0]] * (indicies[1] - indicies[0]))
+                    ncount += 1
+                episode_times[top_folder].append(indicies.copy())
 
     # this removes the first instance of episode times which is just a placeholder
-    episode_times.pop(0)
-    episode_times = np.array(episode_times)
-    np.random.shuffle(episode_times)
+    episode_times['training_set'].pop(0)
+    episode_times['test_set'].pop(0)
+    for key in episode_times.keys():
+        episode_times[key].pop(0)
+        episode_times[key] = np.array(episode_times[key])
+        np.random.shuffle(episode_times[key])
     test_inds = []
     train_inds = []
     # print(episode_times[:, -1])
@@ -74,37 +79,32 @@ def simple_process_data(path):
     # np.random.shuffle(limited_times)  # episode_times)
 
     # Split data into train/test portions and combining all data from different files into a single array
-    test_portion = int(0.2 * len(episode_times))
-    # print(episode_times)
-    train_inds.extend([episode_times[i][0], episode_times[i][1]] for i in range(len(episode_times) - test_portion))
-    test_inds.extend([episode_times[-i - 1][0], episode_times[-i - 1][1]] for i in range(test_portion))
+    # test_portion = int(0.2 * len(episode_times))
+    # # print(episode_times)
+    # train_inds.extend([episode_times[i][0], episode_times[i][1]] for i in range(len(episode_times) - test_portion))
+    # test_inds.extend([episode_times[-i - 1][0], episode_times[-i - 1][1]] for i in range(test_portion))
 
+    trim_inds = {}
     # this separates the episode into train and test episodes
-    train_state = [states[train_inds[i][0]:train_inds[i][1]] for i in range(len(train_inds))]
-    train_label = [labels[train_inds[i][0]:train_inds[i][1]] for i in range(len(train_inds))]
-    test_state = [states[test_inds[i][0]:test_inds[i][1]] for i in range(len(test_inds))]
-    test_label = [labels[test_inds[i][0]:test_inds[i][1]] for i in range(len(test_inds))]
-    # print(train_label, test_label)
+    for key in states.keys():
+        states[key] = [states[key][episode_times[key][i][0]:episode_times[key][i][1]] for i in range(len(episode_times[key]))]
+        labels[key] = [labels[key][episode_times[key][i][0]:episode_times[key][i][1]] for i in range(len(episode_times[key]))]
+        # print(train_label, test_label)
 
-    train_label = np.array(unpack_arr(train_label))
-    test_label = np.array(unpack_arr(test_label))
-    test_trim_inds = np.ones(len(test_label))
-    test_state = np.array(unpack_arr(test_state))
-    train_state = np.array(unpack_arr(train_state))
-    train_trim_inds = np.ones(len(train_label))
-    # print(test_label)
-    train_label = train_label.astype(float)
-    test_label = test_label.astype(float)
-    test_trim_inds = test_trim_inds.astype(float)
-    test_state = test_state.astype(float)
-    train_state = train_state.astype(float)
-    train_trim_inds = train_trim_inds.astype(float)
+        labels[key] = np.array(unpack_arr(labels[key]))
+        states[key] = np.array(unpack_arr(states[key]))
+        trim_inds[key] = np.ones(len(labels[key]))
+        # print(test_label)
+        labels[key] = labels[key].astype(float)
+        states[key] = states[key].astype(float)
+        trim_inds[key] = trim_inds[key].astype(float)
+
     print('average from train and test labels', np.mean(train_label), np.mean(test_label))
     print('lens of labels', np.shape(train_label), np.shape(test_label))
-    data_file = {'train_state': train_state, 'train_label': train_label,
-                 'test_state': test_state, 'test_label': test_label,
-                 'train_reduce_inds': train_trim_inds, 'test_reduce_inds': test_trim_inds,
-                 'train_indexes': train_inds, 'test_indexes': test_inds}
+    data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
+                 'test_state': states['test_set'], 'test_label': labels['test_set'],
+                 'train_reduce_inds': trim_inds['training_set'], 'test_reduce_inds': trim_inds['test_set'],
+                 'train_indexes': episode_times['training_set'], 'test_indexes': episode_times['test_set']}
     file = open('apple_dataset.pkl', 'wb')
     pkl.dump(data_file, file)
     file.close()
