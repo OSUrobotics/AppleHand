@@ -3,7 +3,7 @@
 """
 Created on Sun Oct  3 16:45:34 2021
 
-@author: orochi
+@author: Nigel Swenson
 """
 
 import copy
@@ -15,7 +15,7 @@ from RNNs import GRUNet, LSTMNet
 import pickle as pkl
 import datetime
 import time
-
+from raw_csv_process import unpack_arr
 
 class AppleClassifier():
     def __init__(self, train_dataset, test_dataset, param_dict, model=None):
@@ -47,14 +47,16 @@ class AppleClassifier():
             self.drop_prob = param_dict['drop_prob']
         except KeyError:
             self.drop_prob = 0.2
-        try:
-            self.batch_size = min(param_dict['batch_size'], len(test_dataset))
-        except KeyError:
-            self.batch_size = min(5000, len(test_dataset))
+        #
+        # try:
+        #     self.batch_size = min(param_dict['batch_size'], len(test_dataset))
+        # except KeyError:
+        #     self.batch_size = min(5000, len(test_dataset))
+        #
         try:
             self.input_dim = param_dict['input_dim']
         except KeyError:
-            self.input_dim = len(train_dataset[0][0])
+            self.input_dim = train_dataset.shape[2]
         try:
             self.outputs = param_dict['outputs']
         except KeyError:
@@ -78,11 +80,9 @@ class AppleClassifier():
             self.network_type = 1
 
         self.train_data = DataLoader(train_dataset, shuffle=False,
-                                     batch_size=self.batch_size,
-                                     drop_last=True)
+                                     batch_size=None)
         self.test_data = DataLoader(test_dataset, shuffle=False,
-                                    batch_size=self.batch_size,
-                                    drop_last=True)
+                                    batch_size=None)
 
         self.accuracies = []
         self.TP_rate = []
@@ -133,8 +133,8 @@ class AppleClassifier():
         return classifier_dict.copy()
 
     def generate_ID(self):
-        if self.batch_size != 5000:
-            self.identifier = self.identifier + '_batch=' +str(self.batch_size)
+        # if self.batch_size != 5000:
+        #     self.identifier = self.identifier + '_batch=' +str(self.batch_size)
         if self.epochs != 25:
             self.identifier = self.identifier +'_epochs='+str(self.epochs)
         if self.hidden != 100:
@@ -163,12 +163,13 @@ class AppleClassifier():
         self.steps.append(0)
         net_loss = 0
         for epoch in range(1, self.epochs + 1):
-            hiddens = self.model.init_hidden(self.batch_size)
             net_loss = 0
             epoch_loss = 0
             step = 0
             for x, label in self.train_data:
-                x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
+                hiddens = self.model.init_hidden(np.shape(x)[0])
+                x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
+                label = torch.tensor(label)
                 if self.model_type == "GRU":
                     hiddens = hiddens.data
                 else:
@@ -178,7 +179,7 @@ class AppleClassifier():
                     if torch.isnan(param).any():
                         print('shit went sideways')
                 if self.network_type == 1:
-                    pred = torch.reshape(pred, (self.batch_size,))
+                    pred = torch.reshape(pred, (np.shape(x)[0],))
                     loss = self.loss_fn(pred, label.to(self.device).float())
                 else:
                     loss = self.loss_fn(pred.to('cpu'), label.to('cpu').float())
@@ -203,35 +204,41 @@ class AppleClassifier():
 
     def evaluate(self, threshold=0.5):
         #        start = time.time()
+        outputs = np.array([])
+        test_labels = np.array([])
         self.model.eval()
-        hidden_layer = self.model.init_hidden(self.batch_size)
-        if self.network_type == 'aa':
-            last_ind = 3
-            outputs = np.zeros((self.test_size, 3))
-            test_labels = np.zeros((self.test_size, 3))
-        elif self.network_type == 1:
-            last_ind = 1
-            outputs = np.zeros((self.test_size, 1))
-            test_labels = np.zeros((self.test_size, 1))
-        elif self.network_type == 2:
-            last_ind = 6
-            outputs = np.zeros((self.test_size, 6))
-            test_labels = np.zeros((self.test_size, 6))
-        else:
-            last_ind = 4
-            outputs = np.zeros((self.test_size, 4))
-            test_labels = np.zeros((self.test_size, 4))
+        last_ind = 1
+        # if self.network_type == 'aa':
+        #     last_ind = 3
+        #     outputs = np.zeros((self.test_size, 3))
+        #     test_labels = np.zeros((self.test_size, 3))
+        # elif self.network_type == 1:
+        #     last_ind = 1
+        #     outputs = np.zeros((self.test_size, 1))
+        #     test_labels = np.zeros((self.test_size, 1))
+        # elif self.network_type == 2:
+        #     last_ind = 6
+        #     outputs = np.zeros((self.test_size, 6))
+        #     test_labels = np.zeros((self.test_size, 6))
+        # else:
+        #     last_ind = 4
+        #     outputs = np.zeros((self.test_size, 4))
+        #     test_labels = np.zeros((self.test_size, 4))
         acc = 0
         count = 0
         for x, y in self.test_data:
-            x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
-            y = torch.reshape(y, (self.batch_size, last_ind))
+            hidden_layer = self.model.init_hidden(np.shape(x)[0])
+            # x = torch.tensor(x)
+            y = torch.tensor(y)
+            x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
+            y = torch.reshape(y, (np.shape(y)[0], last_ind))
             hidden_layer = tuple([e.data for e in hidden_layer])
+            # print(x)
             out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
             mod = len(out)
             count += mod
-            outputs[count - mod:count] = out.to('cpu').detach().numpy()
-            test_labels[count - mod:count] = y.to('cpu').detach().numpy()
+            outputs = np.append(outputs, out.to('cpu').detach().numpy())
+            test_labels = np.append(test_labels, y.to('cpu').detach().numpy())
         if self.network_type == 'g':
             for i in range(len(outputs)):
                 temp = abs(np.argmax(outputs[i].to('cpu').detach().numpy()) - test_labels[i])
@@ -278,7 +285,6 @@ class AppleClassifier():
     def evaluate_with_delay(self, threshold=0.5):
         #        start = time.time()
         self.model.eval()
-        hidden_layer = self.model.init_hidden(self.batch_size)
         if self.network_type == 'aa':
             last_ind = 3
             outputs = np.zeros((self.test_size, 3))
@@ -298,8 +304,9 @@ class AppleClassifier():
         acc = 0
         count = 0
         for x, y in self.test_data:
-            x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
-            y = torch.reshape(y, (self.batch_size, last_ind))
+            hidden_layer = self.model.init_hidden(np.shape(x)[0])
+            x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
+            y = torch.reshape(y, (np.shape(y)[0], last_ind))
             hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
             mod = len(out)
@@ -353,12 +360,12 @@ class AppleClassifier():
 
     def evaluate_secondary(self):
         self.model.eval()
-        hidden_layer = self.model.init_hidden(self.batch_size)
         outputs = []
         last_ind = 1
         for x, y in self.test_data:
-            x = torch.reshape(x, (self.batch_size, 1, self.input_dim))
-            y = torch.reshape(y, (self.batch_size, last_ind))
+            hidden_layer = self.model.init_hidden(np.shape(x)[0])
+            x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
+            y = torch.reshape(y, (np.shape(y)[0], last_ind))
             hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
             outputs.append(out.to('cpu').detach().numpy())

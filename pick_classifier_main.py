@@ -3,7 +3,7 @@
 """
 Created on Sun Oct  3 16:54:09 2021
 
-@author: orochi
+@author: Nigel Swenson
 """
 
 import numpy as np
@@ -11,47 +11,54 @@ import matplotlib.pyplot as plt
 import torch
 import pickle as pkl
 from raw_csv_process import process_data
-from simple_csv_process import simple_process_data
+from simple_csv_process import simple_process_data, process_data_iterable
 import argparse
 from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
 from torch.utils.data import TensorDataset, DataLoader
+from utils import RNNDataset
+from itertools import islice
 
 
 def make_data_name(model_name):
     ind = model_name.find('model')
-    return model_name[0:ind] + 'data' + model_name[ind+5:]
+    return model_name[0:ind] + 'data' + model_name[ind + 5:]
 
 
 def build_dataset(database, args):
-    train_trim_inds = database['train_reduce_inds']
-    test_trim_inds = database['test_reduce_inds']
-    if args.reduced:
-        train_state = database['train_state'][train_trim_inds == 1, :]
-        test_state = database['test_state'][test_trim_inds == 1, :]
-        train_label = database['train_label'][train_trim_inds == 1, :]
-        test_label = database['test_label'][test_trim_inds == 1, :]
-    else:
-        train_state = database['train_state']
-        test_state = database['test_state']
-        train_label = database['train_label']
-        test_label = database['test_label']
+    #TODO add in functionality to change the batch size
+    train_dataset = RNNDataset(database['train_state'], database['train_label'], 1)
+    test_dataset = RNNDataset(database['test_state'], database['test_label'], 1)
+    # loader = DataLoader(iterable_dataset, batch_size=None)
 
-    if args.goal.lower() == 'grasp':
-        train_label = train_label[:, -2]
-        test_label = test_label[:, -2]
-    elif args.goal.lower() == 'contact':
-        train_label = train_label[:, 0:6]
-        test_label = test_label[:, 0:6]
-    elif args.goal.lower() == 'slip':
-        train_label = train_label[:, -3]
-        test_label = test_label[:, -3]
-    elif args.goal.lower() == 'drop':
-        train_label = train_label[:, -1]
-        test_label = test_label[:, -1]
-    print(np.count_nonzero(test_label))
-    train_dataset = TensorDataset(torch.from_numpy(train_state), torch.from_numpy(train_label))
-    test_dataset = TensorDataset(torch.from_numpy(test_state), torch.from_numpy(test_label))
+    # train_trim_inds = database['train_reduce_inds']
+    # test_trim_inds = database['test_reduce_inds']
+    # if args.reduced:
+    #     train_state = database['train_state'][train_trim_inds == 1, :]
+    #     test_state = database['test_state'][test_trim_inds == 1, :]
+    #     train_label = database['train_label'][train_trim_inds == 1, :]
+    #     test_label = database['test_label'][test_trim_inds == 1, :]
+    # else:
+    #     train_state = database['train_state']
+    #     test_state = database['test_state']
+    #     train_label = database['train_label']
+    #     test_label = database['test_label']
+    #
+    # if args.goal.lower() == 'grasp':
+    #     train_label = train_label[:, -2]
+    #     test_label = test_label[:, -2]
+    # elif args.goal.lower() == 'contact':
+    #     train_label = train_label[:, 0:6]
+    #     test_label = test_label[:, 0:6]
+    # elif args.goal.lower() == 'slip':
+    #     train_label = train_label[:, -3]
+    #     test_label = test_label[:, -3]
+    # elif args.goal.lower() == 'drop':
+    #     train_label = train_label[:, -1]
+    #     test_label = test_label[:, -1]
+    # print(np.count_nonzero(test_label))
+    # train_dataset = TensorDataset(torch.from_numpy(train_state), torch.from_numpy(train_label))
+    # test_dataset = TensorDataset(torch.from_numpy(test_state), torch.from_numpy(test_label))
     return train_dataset, test_dataset
 
 
@@ -96,7 +103,7 @@ if __name__ == "__main__":
     # Load processed data if it exists and process csvs if it doesn't
     if args.reprocess:
         try:
-            simple_process_data(args.data_path)
+            process_data_iterable(args.data_path)
             file = open('apple_dataset.pkl', 'rb')
             pick_data = pkl.load(file)
             file.close()
@@ -112,7 +119,7 @@ if __name__ == "__main__":
             file.close()
         except FileNotFoundError:
             try:
-                simple_process_data(args.data_path)
+                process_data_iterable(args.data_path)
                 file = open('apple_dataset.pkl', 'rb')
                 pick_data = pkl.load(file)
                 file.close()
