@@ -2,23 +2,14 @@
 """
 Created on Fri Sep 17 15:14:34 2021
 
-@author: nigel
+@author: Nigel Swenson
 """
 
-import copy
 import os
-import time
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import scipy.signal
-from scipy.interpolate import interp1d
-from scipy.signal import resample
-import math
-import bisect
 import pickle as pkl
 import csv
-from raw_csv_process import unpack_arr
+from utils import unpack_arr
 
 
 def process_data_iterable(path):
@@ -69,10 +60,6 @@ def process_data_iterable(path):
                         print(top_folder)
                     states[top_folder].append(episode_state.copy())
 
-    print(pcount,ncount)
-    print(len(states['training_set']),np.shape(states['training_set'][0]))
-    # print(states['training_set'])
-    trim_inds = {}
     data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
                  'test_state': states['test_set'], 'test_label': labels['test_set']}
     file = open('apple_dataset.pkl', 'wb')
@@ -133,16 +120,6 @@ def simple_process_data(path):
         np.random.shuffle(episode_times[key])
     test_inds = []
     train_inds = []
-    # print(episode_times[:, -1])
-    # for part in range(np.max(episode_times[:, -1])):
-    #     limited_times = episode_times[episode_times[:, -1] == part]
-    # np.random.shuffle(limited_times)  # episode_times)
-
-    # Split data into train/test portions and combining all data from different files into a single array
-    # test_portion = int(0.2 * len(episode_times))
-    # # print(episode_times)
-    # train_inds.extend([episode_times[i][0], episode_times[i][1]] for i in range(len(episode_times) - test_portion))
-    # test_inds.extend([episode_times[-i - 1][0], episode_times[-i - 1][1]] for i in range(test_portion))
 
     trim_inds = {}
     # this separates the episode into train and test episodes

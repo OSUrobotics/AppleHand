@@ -15,10 +15,9 @@ from simple_csv_process import simple_process_data, process_data_iterable
 import argparse
 from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
-from torch.utils.data import TensorDataset, DataLoader
 from utils import RNNDataset
 from itertools import islice
-
+import os
 
 def make_data_name(model_name):
     ind = model_name.find('model')
@@ -26,45 +25,17 @@ def make_data_name(model_name):
 
 
 def build_dataset(database, args):
-    #TODO add in functionality to change the batch size
-    train_dataset = RNNDataset(database['train_state'], database['train_label'], 1)
-    test_dataset = RNNDataset(database['test_state'], database['test_label'], 1)
-    # loader = DataLoader(iterable_dataset, batch_size=None)
-
-    # train_trim_inds = database['train_reduce_inds']
-    # test_trim_inds = database['test_reduce_inds']
-    # if args.reduced:
-    #     train_state = database['train_state'][train_trim_inds == 1, :]
-    #     test_state = database['test_state'][test_trim_inds == 1, :]
-    #     train_label = database['train_label'][train_trim_inds == 1, :]
-    #     test_label = database['test_label'][test_trim_inds == 1, :]
-    # else:
-    #     train_state = database['train_state']
-    #     test_state = database['test_state']
-    #     train_label = database['train_label']
-    #     test_label = database['test_label']
-    #
-    # if args.goal.lower() == 'grasp':
-    #     train_label = train_label[:, -2]
-    #     test_label = test_label[:, -2]
-    # elif args.goal.lower() == 'contact':
-    #     train_label = train_label[:, 0:6]
-    #     test_label = test_label[:, 0:6]
-    # elif args.goal.lower() == 'slip':
-    #     train_label = train_label[:, -3]
-    #     test_label = test_label[:, -3]
-    # elif args.goal.lower() == 'drop':
-    #     train_label = train_label[:, -1]
-    #     test_label = test_label[:, -1]
-    # print(np.count_nonzero(test_label))
-    # train_dataset = TensorDataset(torch.from_numpy(train_state), torch.from_numpy(train_label))
-    # test_dataset = TensorDataset(torch.from_numpy(test_state), torch.from_numpy(test_label))
+    train_dataset = RNNDataset(database['train_state'], database['train_label'], args.batch_size)
+    test_dataset = RNNDataset(database['test_state'], database['test_label'], args.batch_size)
     return train_dataset, test_dataset
 
 
 def setup_args(args=None):
     """ Set important variables based on command line arguments OR passed on argument values
     returns: Full set of arguments to be parsed"""
+    main_path = os.path.abspath(__file__)
+    main_path = os.path.dirname(main_path)
+    main_path = os.path.join(main_path, 'raw_data/')
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", default="LSTM", type=str)  # RNN used
     parser.add_argument("--epochs", default=25, type=int)  # num epochs trained for
@@ -73,7 +44,7 @@ def setup_args(args=None):
     parser.add_argument("--drop_prob", default=0.2, type=float)  # drop probability
     parser.add_argument("--reduced", default=True, type=bool)  # flag indicating to reduce data to only grasp part
     parser.add_argument("--data_path",
-                        default="/media/avl/StudyData/Apple Pick Data/Apple Proxy Picks/2 - Apple Proxy with spherical approach/",
+                        default=main_path,
                         type=str)  # path to unprocessed data
     parser.add_argument("--policy", default=None, type=str)  # filepath to trained policy
     parser.add_argument("--ablate", default=False, type=bool)  # flag to determine if ablation should be run
@@ -90,7 +61,7 @@ def setup_args(args=None):
     parser.add_argument("--reprocess", default=False, type=bool)  # bool to manually reprocess data if changed
     parser.add_argument("--compare_policy", default=False,
                         type=bool)  # bool to train new policy and compare to old policy in all plots
-    parser.add_argument("--batch_size", default=5000, type=int)  # number of points in a batch during training
+    parser.add_argument("--batch_size", default=1, type=int)  # number of episodes in a batch during training
 
     args = parser.parse_args()
     return args
@@ -208,7 +179,7 @@ if __name__ == "__main__":
             TPs = [1]
             FPs = [1]
             for i in range(21):
-                _, TP, FP = policy.evaluate_with_delay(threshold=i * 0.05)
+                _, TP, FP = policy.evaluate(threshold=i * 0.05)
                 TPs.append(TP)
                 FPs.append(FP)
             print(f'policy {count} finished')
@@ -237,26 +208,24 @@ if __name__ == "__main__":
         while single_episode_flag:
             single_episode_plot = plt.figure(figure_count)
             plot_bounds = [loaded_classifiers[0].visualization_range[0], loaded_classifiers[0].visualization_range[1]]
-            plt.plot(range(plot_bounds[0], plot_bounds[1]),
-                     test_data.tensors[0][
-                     plot_bounds[0]:plot_bounds[1],
-                     -4] / 20,
-                     linewidth=2, c='red')
-            plt.scatter(
-                range(plot_bounds[0], plot_bounds[1]),
-                test_data.tensors[1][
-                plot_bounds[0]:plot_bounds[1]],
-                c='green')
+            first_plot = True
             for policy in loaded_classifiers:
-                outputs = policy.evaluate_secondary()
-                legend.append(policy.identifier + ' raw output')
-                legend.append(policy.identifier + ' rounded output')
+                x, y, outputs = policy.evaluate_secondary()
+                if first_plot:
+                    plt.plot(range(len(x)), x,
+                             linewidth=2, c='red')
+                    plt.scatter(
+                        range(len(y)), y,
+                        c='green')
+                    first_plot = False
+                    legend.append(policy.identifier + ' raw output')
+                    legend.append(policy.identifier + ' rounded output')
                 count += 1
                 rounded_outputs = []
                 for i in range(len(outputs)):
                     rounded_outputs.append((outputs[i] > 0.5) + 0.05)
-                plt.scatter(range(plot_bounds[0], plot_bounds[1]), outputs, marker="+")
-                plt.scatter(range(plot_bounds[0], plot_bounds[1]), rounded_outputs, marker="x")
+                plt.scatter(range(len(outputs)), outputs, marker="+")
+                plt.scatter(range(len(rounded_outputs)), rounded_outputs, marker="x")
             plt.legend(legend)
             plt.show()
             figure_count += 1

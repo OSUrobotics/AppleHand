@@ -2,31 +2,19 @@
 """
 Created on Fri Sep 17 15:14:34 2021
 
-@author: nigel
+@author: Nigel Swenson
 """
 
-import copy
 import os
 import time
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import scipy.signal
-from scipy.interpolate import interp1d
 from scipy.signal import resample
 import math
 import bisect
 import pickle as pkl
 import csv
-
-
-def unpack_arr(long_arr):
-    """
-    Unpacks an array of shape N x M x ... into array of N*M x ...
-    @param long_arr - array to be unpacked"""
-    new_arr = [item for sublist in long_arr for item in sublist]
-    return new_arr
-
+from utils import unpack_arr
 
 def downsample(signal, times):
     """

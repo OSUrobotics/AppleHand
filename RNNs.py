@@ -3,10 +3,11 @@
 """
 Created on Tue Jun  1 23:29:29 2021
 
-@author: orochi
+@author:
 """
 import torch
 import torch.nn as nn
+
 is_cuda = torch.cuda.is_available()
 if is_cuda:
     device = torch.device("cuda")
