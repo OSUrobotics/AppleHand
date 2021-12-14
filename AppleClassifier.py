@@ -251,7 +251,7 @@ class AppleClassifier:
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
         return acc, TP, FP
 
-    def evaluate_secondary(self):
+    def evaluate_episode(self):
         self.model.eval()
         last_ind = 1
         plot_data = list(self.test_data)[self.plot_ind]

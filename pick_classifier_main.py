@@ -211,7 +211,7 @@ if __name__ == "__main__":
             plot_bounds = [loaded_classifiers[0].visualization_range[0], loaded_classifiers[0].visualization_range[1]]
             first_plot = True
             for policy in loaded_classifiers:
-                x, y, outputs = policy.evaluate_secondary()
+                x, y, outputs = policy.evaluate_episode()
                 if first_plot:
                     plt.plot(range(len(x)), x,
                              linewidth=2, c='red')
