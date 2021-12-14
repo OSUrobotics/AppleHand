@@ -16,6 +16,7 @@ import pickle as pkl
 import csv
 from utils import unpack_arr
 
+
 def downsample(signal, times):
     """
     Takes a timestamped signal or set of signals and downsamples to fit a

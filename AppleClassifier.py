@@ -18,7 +18,7 @@ import time
 from utils import unpack_arr
 
 
-class AppleClassifier():
+class AppleClassifier:
     def __init__(self, train_dataset, test_dataset, param_dict, model=None):
         """
         A class for training, evaluating and generating plots of a classifier
@@ -134,8 +134,6 @@ class AppleClassifier():
         return classifier_dict.copy()
 
     def generate_ID(self):
-        # if self.batch_size != 5000:
-        #     self.identifier = self.identifier + '_batch=' +str(self.batch_size)
         if self.epochs != 25:
             self.identifier = self.identifier + '_epochs=' + str(self.epochs)
         if self.hidden != 100:
@@ -191,7 +189,9 @@ class AppleClassifier():
                 epoch_loss += float(loss)
                 step += 1
             acc, TP, FP = self.evaluate(0.5)
+            train_acc, train_tp, train_fp = self.evaluate(0.5,'train')
             print(f'epoch {epoch}: accuracy - {acc}, loss - {epoch_loss}, TP rate - {TP}, FP rate - {FP}')
+            print(f'epoch {epoch}: train accuracy - {train_acc}, train TP rate - {train_tp}, train FP rate - {train_fp}')
             if acc > backup_acc:
                 self.best_model = copy.deepcopy(self.model)
                 backup_acc = acc
@@ -203,7 +203,7 @@ class AppleClassifier():
             net_loss = 0
         print(f'Finished training, best recorded model had acc = {backup_acc}')
 
-    def evaluate(self, threshold=0.5):
+    def evaluate(self, threshold=0.5, test_set='test'):
         outputs = np.array([])
         test_labels = np.array([])
         self.model.eval()
@@ -212,7 +212,11 @@ class AppleClassifier():
         count = 0
         last_ind_output = []
         last_ind_label = []
-        for x, y in self.test_data:
+        if test_set == 'test':
+            data = self.test_data
+        elif test_set == 'train':
+            data = self.train_data
+        for x, y in data:
             hidden_layer = self.model.init_hidden(np.shape(x)[0])
             # x = torch.tensor(x)
             # y = torch.tensor(y)
@@ -261,7 +265,7 @@ class AppleClassifier():
         self.model.train()
         normalized_feature = x[:, :, 3]
         normalized_feature = (normalized_feature - min(normalized_feature)) / (
-                    max(normalized_feature) - min(normalized_feature))
+                max(normalized_feature) - min(normalized_feature))
         return normalized_feature, y, outputs
 
     @staticmethod

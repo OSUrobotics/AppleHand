@@ -19,6 +19,7 @@ from utils import RNNDataset
 from itertools import islice
 import os
 
+
 def make_data_name(model_name):
     ind = model_name.find('model')
     return model_name[0:ind] + 'data' + model_name[ind + 5:]

@@ -19,16 +19,12 @@ def process_data_iterable(path):
     downsamples high frequency data, generates labels for all picks and saves
     processed data as npy files for later use.
     @param path - Filepath containing rosbags and csvs from apple picking"""
-    success_keys = ['s', 'y', 'yes', 'success']
-    fail_keys = ['f', 'n', 'no', 'fail']
     folder_names = ['successful_picks', 'failed_picks']
     big_names = ['training_set', 'test_set']
     pcount = 0
     ncount = 0
-    episode_times = {'training_set':[[-1, -1]], 'test_set':[[-1, -1]]}
     states = {'training_set': [], 'test_set': []}
     labels = {'training_set': [], 'test_set': []}
-    lens = []
 
     # This loop iterates through all the folders in the path folder, which contains different folders for each set of starting noises
     for top_folder in big_names:
@@ -45,7 +41,6 @@ def process_data_iterable(path):
                     for row in reader:
                         if temp:
                             episode_state.append(row[1:])
-                            # states[top_folder].append(row[1:])
                         else:
                             temp = True
                 if len(episode_state) > 0:
