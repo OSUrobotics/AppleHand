@@ -18,6 +18,9 @@ from Ablation import perform_ablation
 from utils import RNNDataset
 from itertools import islice
 import os
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
+import datetime
 
 
 def make_data_name(model_name):
@@ -25,9 +28,39 @@ def make_data_name(model_name):
     return model_name[0:ind] + 'data' + model_name[ind + 5:]
 
 
-def build_dataset(database, args):
-    train_dataset = RNNDataset(database['train_state'], database['train_label'], args.batch_size)
-    test_dataset = RNNDataset(database['test_state'], database['test_label'], args.batch_size)
+def build_dataset(database, args, validate=False):
+    print(args.used_features)
+    params = None
+    if args.used_features is None:
+        if validate:
+            params = np.load('proxy_mins_and_maxs.npy', allow_pickle=True)
+            params = params.item()
+        train_dataset = RNNDataset(database['train_state'], database['train_label'], args.batch_size,range_params=params)
+        params = train_dataset.get_params()
+        test_dataset = RNNDataset(database['test_state'], database['test_label'], args.batch_size, range_params=params)
+        np.save('proxy_mins_and_maxs', params)
+    else:
+        labels = {'Arm Force': [0, 1, 2],
+                  'Arm Torque': [3, 4, 5],
+                  'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
+                  'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
+                  'Finger Position': [12, 21, 30],
+                  'Finger Speed': [13, 22, 31],
+                  'Finger Effort': [14, 23, 32]}
+        used_labels = []
+        for label in args.used_features:
+            used_labels.extend(labels[label])
+        if validate:
+            params = np.load('proxy_mins_and_maxs.npy', allow_pickle=True)
+            params = params.item()
+        try:
+            train_dataset = RNNDataset(list(np.array(database['train_state'])[:, :, used_labels]), database['train_label'], args.batch_size, range_params=params)
+            params = train_dataset.get_params()
+        except IndexError:
+            train_dataset = None
+        
+        test_dataset = RNNDataset(list(np.array(database['test_state'])[:, :, used_labels]), database['test_label'], args.batch_size, range_params=params)
+        np.save('proxy_mins_and_maxs',params)
     return train_dataset, test_dataset
 
 
@@ -54,6 +87,7 @@ def setup_args(args=None):
     parser.add_argument("--plot_loss", default=False,
                         type=bool)  # flag to determine if we want to plot the loss over epochs
     parser.add_argument("--plot_ROC", default=False, type=bool)  # flag to determine if we want to plot an ROC
+    parser.add_argument("--check_RF", default=False, type=bool)  # flag to determine if we want to compare LSTM to RF on an ROC curve
     parser.add_argument("--plot_TP_FP", default=False,
                         type=bool)  # flag to determine if we want to plot the TP and FP over epochs
     parser.add_argument("--plot_example", default=False,
@@ -63,8 +97,13 @@ def setup_args(args=None):
     parser.add_argument("--compare_policy", default=False,
                         type=bool)  # bool to train new policy and compare to old policy in all plots
     parser.add_argument("--batch_size", default=1, type=int)  # number of episodes in a batch during training
+    parser.add_argument("--used_features", default=None, type=str)
+    parser.add_argument("--validate", default=False, type=bool)
+    parser.add_argument("--validation_path", default=None, type=str)
 
     args = parser.parse_args()
+    if args.used_features is not None:
+        args.used_features = args.used_features.split(',')
     return args
 
 
@@ -73,6 +112,11 @@ if __name__ == "__main__":
     args = setup_args()
 
     # Load processed data if it exists and process csvs if it doesn't
+    if args.validation_path is not None:
+        try:
+            process_data_iterable(args.validation_path, validation=True)
+        except:
+            process_data(args.validation_path, validation=True) #right now this won't work
     if args.reprocess:
         try:
             process_data_iterable(args.data_path)
@@ -100,9 +144,18 @@ if __name__ == "__main__":
                 file = open('apple_dataset.pkl', 'rb')
                 pick_data = pkl.load(file)
                 file.close()
-    # Load processed data into dataset as required by goal argument
-    train_data, test_data = build_dataset(pick_data, args)
 
+    train_data, test_data = build_dataset(pick_data, args)
+    if args.validate:
+        try:
+            file = open('validation_dataset.pkl', 'rb')
+            validation_dataset = pkl.load(file)
+            file.close()
+            print(np.array(validation_dataset['test_state'])[:, :, 1])
+            _, validation_data = build_dataset(validation_dataset, args, validate=True)
+        except FileNotFoundError:
+            print('No validation dataset, make sure you pass in the path to the validation data before running with validate=True')
+            raise FileNotFoundError
     # Load policy if it exists, if not train a new one
     loaded_classifiers = []
     loaded_dicts = []
@@ -115,16 +168,17 @@ if __name__ == "__main__":
     else:
         classifier = AppleClassifier(train_data, test_data, vars(args))
         classifier.load_model(args.policy)
-        classifier.load_model_data(make_data_name(args.policy))
+        classifier.load_model_data(args.policy)
     loaded_classifiers.append(classifier)
     loaded_dicts.append(classifier.get_data_dict())
     if args.compare_policy:
         old_classifier = AppleClassifier(train_data, test_data, vars(args))
         old_classifier.load_model(args.policy)
-        old_classifier.load_model_data(make_data_name(args.policy))
+        old_classifier.load_model_data(args.policy)
         loaded_classifiers.append(old_classifier)
         loaded_dicts.append(old_classifier.get_data_dict())
     figure_count = 1
+
     # Plot accuracy over time if desired
     if args.plot_acc:
         print('Plotting classifier accuracy over time')
@@ -132,7 +186,9 @@ if __name__ == "__main__":
         acc_plot = plt.figure(figure_count)
         for data in loaded_dicts:
             plt.plot(data['steps'], data['acc'])
-            legend.append(data['ID'])
+            plt.plot(data['steps'], data['train_acc'])
+            legend.append(data['ID'] + 'accuracy')
+            legend.append(data['ID'] + 'training accuracy')
         plt.legend(legend)
         plt.xlabel('Steps')
         plt.ylabel('Accuracy')
@@ -169,31 +225,131 @@ if __name__ == "__main__":
         plt.title('True and False Positive Rate')
         figure_count += 1
 
+    # Train a random forset on the last datapoint in the series if desired
+    if args.check_RF:
+        RF_train_data = []
+        train_label = []
+        for episode, episode_label in zip(pick_data['train_state'], pick_data['train_label']):
+            RF_train_data.append(episode[-1])
+            train_label.append(episode_label[-1])
+        test_data = []
+        test_label = []
+        for episode, episode_label in zip(pick_data['test_state'], pick_data['test_label']):
+            test_data.append(episode[-1])
+            test_label.append(episode_label[-1])
+        RF = RandomForestClassifier(n_estimators=100, random_state=42)
+        RF.fit(RF_train_data, train_label)
+        test_results = RF.predict(test_data)
+        print("RF classifier accuracy:", metrics.accuracy_score(test_label, test_results))
+        np.save('RF_classifier_acc' + datetime.datetime.now().strftime("%m_%d_%y_%H%M"), np.array(metrics.accuracy_score(test_label, test_results)))
+    
     # Plot an ROC if desired
     if args.plot_ROC:
         legend = []
         print('Plotting an ROC curve with threshold increments of 0.05')
         count = 0
-        ROC_plot = plt.figure(figure_count)
+        if args.check_RF:
+            RF_train_data = []
+            train_label = []
+            for episode, episode_label in zip(pick_data['train_state'], pick_data['train_label']):
+                RF_train_data.append(episode[-1])
+                train_label.append(episode_label[-1])
+            test_data = []
+            test_label = []
+            for episode, episode_label in zip(pick_data['test_state'], pick_data['test_label']):
+                test_data.append(episode[-1])
+                test_label.append(episode_label[-1])
+            RF = RandomForestClassifier(n_estimators=100, random_state=42)
+            RF.fit(RF_train_data, train_label)
+            test_results = RF.predict(test_data)
+            print("RF classifier accuracy:", metrics.accuracy_score(test_label, test_results))
+            svc_disp = metrics.RocCurveDisplay.from_estimator(RF, test_data, test_label)
+            legend.append('RF classifier')
+        else:
+            ROC_plot = plt.figure(figure_count)
         for policy in loaded_classifiers:
             accs = []
             TPs = [1]
             FPs = [1]
+            flag=False
             for i in range(21):
-                _, TP, FP = policy.evaluate(threshold=i * 0.05)
+                try:
+                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=flag)
+                except RuntimeError:
+                    flag = True
+                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=True)
+                print(f'threshold {i} has tp-fp {TP}-{FP} and acc {acc}')
                 TPs.append(TP)
                 FPs.append(FP)
+                accs.append(acc)
             print(f'policy {count} finished')
             plt.plot(FPs, TPs)
             legend.append(policy.identifier)
             count += 1
+            print('best accuracy is ', np.max(accs))
         baseline = [0, 1]
         legend.append('Random Baseline')
         plt.plot(baseline, baseline, linestyle='--')
         plt.legend(legend)
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title('ROC')
+        plt.title('Test ROC')
+
+        figure_count += 1
+
+    # Find validation ROC if desired
+    if args.validate:
+        legend = []
+        print('Plotting an ROC curve with threshold increments of 0.05')
+        count = 0
+        if args.check_RF:
+            RF_train_data = []
+            train_label = []
+            for episode, episode_label in zip(pick_data['train_state'], pick_data['train_label']):
+                RF_train_data.append(episode[-1])
+                train_label.append(episode_label[-1])
+            test_data = []
+            test_label = []
+            for episode, episode_label in zip(validation_dataset['test_state'], validation_dataset['test_label']):
+                test_data.append(episode[-1])
+                test_label.append(episode_label[-1])
+            RF = RandomForestClassifier(n_estimators=100, random_state=42)
+            RF.fit(RF_train_data, train_label)
+            test_results = RF.predict(test_data)
+            print("RF classifier accuracy:", metrics.accuracy_score(test_label, test_results))
+            svc_disp = metrics.RocCurveDisplay.from_estimator(RF, test_data, test_label)
+            legend.append('RF classifier')
+        else:
+            ROC_plot = plt.figure(figure_count)
+        for policy in loaded_classifiers:
+            accs = []
+            TPs = [1]
+            FPs = [1]
+            flag = False
+            policy.load_dataset(train_data, validation_data)
+            for i in range(21):
+                try:
+                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=flag)
+                except RuntimeError:
+                    flag = True
+                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=True)
+                print(f'threshold {i} has tp-fp {TP}-{FP} and acc {acc}')
+                TPs.append(TP)
+                FPs.append(FP)
+                accs.append(acc)
+            print(f'policy {count} finished')
+            plt.plot(FPs, TPs)
+            legend.append(policy.identifier)
+            count += 1
+            print('best accuracy is ', np.max(accs))
+        baseline = [0, 1]
+        legend.append('Random Baseline')
+        plt.plot(baseline, baseline, linestyle='--')
+        plt.legend(legend)
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Validation ROC')
+
         figure_count += 1
 
     # Visualize all plots made
@@ -238,4 +394,4 @@ if __name__ == "__main__":
 
     # Perform ablation on feature groups if desired
     if args.ablate:
-        perform_ablation(train_data, test_data, args)
+        perform_ablation(pick_data, args)

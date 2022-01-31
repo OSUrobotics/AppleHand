@@ -12,20 +12,26 @@ import csv
 from utils import unpack_arr
 
 
-def process_data_iterable(path):
+def process_data_iterable(path, features=None, validation=False):
     """
     Reads apple picking data saved in the given path, removes datapoints
     that are not recorded on all channels, removes dead time in the pick,
     downsamples high frequency data, generates labels for all picks and saves
     processed data as npy files for later use.
     @param path - Filepath containing rosbags and csvs from apple picking"""
-    folder_names = ['successful_picks', 'failed_picks']
+    folder_names = ['successful', 'failed']
     big_names = ['training_set', 'test_set']
     pcount = 0
     ncount = 0
     states = {'training_set': [], 'test_set': []}
     labels = {'training_set': [], 'test_set': []}
-
+    data_labels = {'Arm Force': [0, 1, 2], 
+              'Arm Torque': [3,4,5],
+              'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
+              'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
+              'Finger Position': [12, 21, 30],
+              'Finger Speed': [13, 22, 31],
+              'Finger Effort': [14, 23, 32]}
     # This loop iterates through all the folders in the path folder, which contains different folders for each set of starting noises
     for top_folder in big_names:
         for folder in folder_names:
@@ -46,7 +52,7 @@ def process_data_iterable(path):
                 if len(episode_state) > 0:
                     episode_state = np.array(episode_state)
                     episode_state = episode_state.astype(float)
-                    if folder == 'successful_picks':
+                    if folder == 'successful':
                         labels[top_folder].append([1] * len(episode_state))
                         pcount += 1
                     else:
@@ -57,13 +63,17 @@ def process_data_iterable(path):
 
     data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
                  'test_state': states['test_set'], 'test_label': labels['test_set']}
-    file = open('apple_dataset.pkl', 'wb')
+    if validation:
+        file=open('validation_dataset.pkl','wb')
+    else:
+        file = open('apple_dataset.pkl', 'wb')
     pkl.dump(data_file, file)
     file.close()
+    print()
     print('all files saved')
 
 
-def simple_process_data(path):
+def simple_process_data(path, features=None, validation=False):
     """
     Reads apple picking data saved in the given path, removes datapoints
     that are not recorded on all channels, removes dead time in the pick,
@@ -72,7 +82,7 @@ def simple_process_data(path):
     @param path - Filepath containing rosbags and csvs from apple picking"""
     success_keys = ['s', 'y', 'yes', 'success']
     fail_keys = ['f', 'n', 'no', 'fail']
-    folder_names = ['successful_picks', 'failed_picks']
+    folder_names = ['successful', 'failed']
     big_names = ['training_set', 'test_set']
     pcount = 0
     ncount = 0
@@ -80,6 +90,13 @@ def simple_process_data(path):
     states = {'training_set': [], 'test_set': []}
     labels = {'training_set': [], 'test_set': []}
     lens = []
+    data_labels = {'Arm Force': [0, 1, 2], 
+              'Arm Torque': [3,4,5],
+              'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
+              'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
+              'Finger Position': [12, 21, 30],
+              'Finger Speed': [13, 22, 31],
+              'Finger Effort': [14, 23, 32]}
     # This loop iterates through all the folders in the path folder, which contains different folders for each set of starting noises
     for top_folder in big_names:
         for folder in folder_names:
@@ -98,7 +115,7 @@ def simple_process_data(path):
                         else:
                             temp = True
                 indicies[1] = len(states[top_folder])
-                if folder == 'successful_picks':
+                if folder == 'successful':
                     labels[top_folder].extend([[1, 1, 1, 1, 1, 1, 1]] * (indicies[1] - indicies[0]))
                     pcount += 1
                 else:
@@ -137,7 +154,10 @@ def simple_process_data(path):
                  'test_state': states['test_set'], 'test_label': labels['test_set'],
                  'train_reduce_inds': trim_inds['training_set'], 'test_reduce_inds': trim_inds['test_set'],
                  'train_indexes': episode_times['training_set'], 'test_indexes': episode_times['test_set']}
-    file = open('apple_dataset.pkl', 'wb')
+    if validation:
+        file=open('validation_dataset.pkl','wb')
+    else:
+        file = open('apple_dataset.pkl', 'wb')
     pkl.dump(data_file, file)
     file.close()
     print('all files saved')

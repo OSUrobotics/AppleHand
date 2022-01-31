@@ -10,9 +10,10 @@ from torch.utils.data import TensorDataset, DataLoader
 import pickle as pkl
 import datetime
 from AppleClassifier import AppleClassifier
+from utils import RNNDataset
+import matplotlib.pyplot as plt
 
-
-def perform_ablation(train_dataset, test_dataset, args):
+def perform_ablation(database, args):
     """
     Function to perform an ablation study to determine which feature is the
     most important for the classification
@@ -22,26 +23,39 @@ def perform_ablation(train_dataset, test_dataset, args):
     the classifiers
     @return - a dictionary containing the acuracy, standard deviation, number
     of inputs and removed features for every step of the ablation"""
-    labels = {'IMU Accelearation': [0, 1, 2, 9, 10, 11, 18, 19, 20], 
-              'IMU Velocity': [3, 4, 5, 12, 13, 14, 21, 22, 23],
-              'Joint Pos': [6, 15, 24],
-              'Joint Velocity': [7, 16, 25],
-              'Joint Effort': [8, 17, 26],
-              'Arm Joint State': [27, 28, 29, 30, 31, 32],
-              'Arm Joint Velocity': [33, 34, 35, 36, 37, 38],
-              'Arm Joint Effort': [39, 40, 41, 42, 43, 44],
-              'Wrench Force': [45, 46, 47],
-              'Wrench Torque': [48, 49, 50]}
-    full_list = np.array(range(51))
+#    labels = {'IMU Accelearation': [0, 1, 2, 9, 10, 11, 18, 19, 20], 
+#              'IMU Velocity': [3, 4, 5, 12, 13, 14, 21, 22, 23],
+#              'Joint Pos': [6, 15, 24],
+#              'Joint Velocity': [7, 16, 25],
+#              'Joint Effort': [8, 17, 26],
+#              'Arm Joint State': [27, 28, 29, 30, 31, 32],
+#              'Arm Joint Velocity': [33, 34, 35, 36, 37, 38],
+#              'Arm Joint Effort': [39, 40, 41, 42, 43, 44],
+#              'Wrench Force': [45, 46, 47],
+#              'Wrench Torque': [48, 49, 50]}
+#    labels = {'Arm Force': [0, 1, 2, 3], 
+#              'Arm Torque': [4, 5, 6, 7],
+#              'IMU Time': [8, 20, 32],
+#              'IMU Acceleration': [9, 10, 11, 12, 21, 22, 23, 24, 33, 34, 35, 36],
+#              'IMU Gyro': [13, 14, 15, 25, 26, 27, 37, 38, 39],
+#              'Finger State Time': [16, 28, 40],
+#              'Finger Position': [17, 29, 41],
+#              'Finger Speed': [18, 30, 42],
+#              'Finger Effort': [19, 31, 43]}
+    labels = {'Arm Force': [0, 1, 2], 
+              'Arm Torque': [3,4,5],
+              'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
+              'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
+              'Finger Position': [12, 21, 30],
+              'Finger Speed': [13, 22, 31],
+              'Finger Effort': [14, 23, 32]}
+    full_list = np.array(range(33))
     missing_labels = []
     missing_names = ''
     worst_names = []
-    sizes = [51]
-
-    full_train_loader = DataLoader(train_dataset, shuffle=False,
-                                   batch_size=args.batch_size, drop_last=True)
-    full_test_loader = DataLoader(test_dataset, shuffle=False,
-                                  batch_size=args.batch_size, drop_last=True)
+    sizes = [33]
+    full_train_loader = RNNDataset(database['train_state'], database['train_label'], args.batch_size)
+    full_test_loader = RNNDataset(database['test_state'], database['test_label'], args.batch_size)
     performance = []
     for i in range(3):
         full_lstm = AppleClassifier(full_train_loader, full_test_loader,
@@ -51,32 +65,28 @@ def perform_ablation(train_dataset, test_dataset, args):
         print('model finished, saving now')
         full_lstm.save_data()
     best_accuracies = [np.average(performance)]
-    best_acc_std_dev = np.std(best_accuracies)
-    for phase in range(9):
+    best_acc_std_dev = [np.std(best_accuracies)]
+    for phase in range(6):
         feature_combo_accuracies = []
         names = []
         indexes = []
         acc_std_dev = []
         for name, missing_label in labels.items():
-            temp = np.ones(51, dtype=bool)
+            temp = np.ones(33, dtype=bool)
             temp[missing_label] = False
             try:
                 temp[missing_labels] = False
             except:
                 pass
             used_labels = full_list[temp]
-            reduced_train_dataset = TensorDataset(train_dataset.tensors[0][:, used_labels],
-                                                             train_dataset.tensors[1])
-            reduced_test_dataset = TensorDataset(test_dataset.tensors[0][:, used_labels],
-                                                             train_dataset.tensors[1])
-            reduced_train_loader = DataLoader(reduced_train_dataset, shuffle=False,
-                                              batch_size=args.batch_size, drop_last=True)
-            reduced_test_loader = DataLoader(reduced_test_dataset, shuffle=False,
-                                             batch_size=args.batch_size, drop_last=True)
+            reduced_train_dataset = RNNDataset(list(np.array(database['train_state'])[:, :, used_labels]), database['train_label'], args.batch_size)
+            reduced_test_dataset = RNNDataset(list(np.array(database['test_state'])[:, :, used_labels]), database['test_label'], args.batch_size)
+            args.input_dim = len(used_labels)
+            print('using this many labels', len(used_labels))
             performance = []
             for i in range(3):
-                base_lstm = AppleClassifier(reduced_train_loader,
-                                            reduced_test_loader, vars(args))
+                base_lstm = AppleClassifier(reduced_train_dataset,
+                                            reduced_test_dataset, vars(args))
                 base_lstm.train()
                 performance.append(np.max(base_lstm.accuracies))
                 print('model finished, saving now')
@@ -86,7 +96,9 @@ def perform_ablation(train_dataset, test_dataset, args):
             names.append(name)
             indexes.append(missing_label)
         best_one = np.argmax(feature_combo_accuracies)
-        print('best combination', best_one, np.shape(feature_combo_accuracies), np.shape(names))
+        print('')
+        print('best combination', best_one, np.max(feature_combo_accuracies), np.shape(names))
+        print('')
         missing_names = missing_names + names[best_one]
         missing_labels.extend(indexes[best_one])
         best_accuracies.append(feature_combo_accuracies[best_one])
@@ -99,8 +111,21 @@ def perform_ablation(train_dataset, test_dataset, args):
 
     grasp_ablation_dict = {'num inputs': sizes, 'best accuracy': best_accuracies,
                            'std dev': best_acc_std_dev, 'names': worst_names}
-    file = open('grasp_ablation_data' + datetime.datetime.now().strftime("%m_%d_%y_%H%M")
+    file = open('./generated_data/grasp_ablation_data' + datetime.datetime.now().strftime("%m_%d_%y_%H%M")
                 + '.pkl', 'wb')
     pkl.dump(grasp_ablation_dict, file)
     file.close()
     return grasp_ablation_dict
+
+
+def plot_ablation(ablation_dict):
+    input_size = ablation_dict['num inputs']
+    accuracy = ablation_dict['best accuracy']
+    errs = ablation_dict['std dev']
+    plt.errorbar(input_size,accuracy,yerr=errs)
+    plt.show()
+
+if __name__ == "__main__":            
+    with open('./generated_data/grasp_ablation_data01_30_22_0122.pkl', 'rb') as file:
+        pick_data = pkl.load(file)
+    plot_ablation(pick_data)
