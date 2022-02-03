@@ -28,7 +28,7 @@ class AppleClassifier:
         @param param_dict - Dictionary with parameters for model, training, etc
         for detail on acceptable parameters, look at valid_parameters.txt
         """
-        self.eval_type = 'pick'
+        self.eval_type = 'last'
         try:
             self.epochs = param_dict['epochs']
         except KeyError:

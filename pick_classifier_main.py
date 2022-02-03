@@ -299,14 +299,16 @@ class ExperimentHandler():
             accs = []
             TPs = [1]
             FPs = [1]
-            flag=False
-            for i in range(21):
+            flag = False
+            detail = 101
+            for i in range(detail):
+                thold = i/(detail-1)
                 try:
-                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=flag)
+                    acc, TP, FP = policy.evaluate(threshold=thold, current=flag)
                 except RuntimeError:
                     flag = True
-                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=True)
-                print(f'threshold {i} has tp-fp {TP}-{FP} and acc {acc}')
+                    acc, TP, FP = policy.evaluate(threshold=thold, current=True)
+                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
                 TPs.append(TP)
                 FPs.append(FP)
                 accs.append(acc)
@@ -345,7 +347,7 @@ class ExperimentHandler():
     
     def validation(self):
         legend = []
-        print('Plotting an ROC curve with threshold increments of 0.05')
+        print('Plotting an ROC curve')
         count = 0
         if self.args.check_RF:
             RF_train_data = []
@@ -372,14 +374,16 @@ class ExperimentHandler():
             TPs = [1]
             FPs = [1]
             flag = False
+            detail = 101
             policy.load_dataset(self.train_dataset, self.validation_dataset)
-            for i in range(21):
+            for i in range(detail):
+                thold = i/(detail-1)
                 try:
-                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=flag)
+                    acc, TP, FP = policy.evaluate(threshold=thold, current=flag)
                 except RuntimeError:
                     flag = True
-                    acc, TP, FP = policy.evaluate(threshold=i * 0.05, current=True)
-                print(f'threshold {i} has tp-fp {TP}-{FP} and acc {acc}')
+                    acc, TP, FP = policy.evaluate(threshold=thold, current=True)
+                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
                 TPs.append(TP)
                 FPs.append(FP)
                 accs.append(acc)
