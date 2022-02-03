@@ -12,6 +12,7 @@ import csv
 from utils import unpack_arr
 
 
+
 def process_data_iterable(path, features=None, validation=False):
     """
     Reads apple picking data saved in the given path, removes datapoints
@@ -40,7 +41,7 @@ def process_data_iterable(path, features=None, validation=False):
             # episode data and have the same pick number as the csv label file in the folder above
             for datafile in csv_files:
                 episode_state = []
-                print('opening up name', datafile)
+                print('Opening up name', datafile)
                 with open(path + '/' + top_folder + '/' + folder + '/' + datafile, 'r') as csv_file:
                     reader = csv.reader(csv_file)
                     temp = False
@@ -50,15 +51,24 @@ def process_data_iterable(path, features=None, validation=False):
                         else:
                             temp = True
                 if len(episode_state) > 0:
+                    e_len =len(episode_state)
                     episode_state = np.array(episode_state)
                     episode_state = episode_state.astype(float)
+                    episode_label = [0.5] * int(e_len/4)
                     if folder == 'successful':
-                        labels[top_folder].append([1] * len(episode_state))
+                        middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
+                        episode_label.extend(middle_label)
+                        episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+                        labels[top_folder].append(episode_label)
                         pcount += 1
                     else:
-                        labels[top_folder].append([0] * len(episode_state))
+                        middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * -0.5 + 0.5
+                        episode_label.extend(middle_label)
+                        episode_label.extend([0] * int(e_len-int(e_len/4)-int(e_len/2)))
+                        labels[top_folder].append(episode_label)
                         ncount += 1
                         print(top_folder)
+#                    input(episode_label)
                     states[top_folder].append(episode_state.copy())
 
     data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
@@ -71,7 +81,6 @@ def process_data_iterable(path, features=None, validation=False):
     file.close()
     print()
     print('all files saved')
-
 
 def simple_process_data(path, features=None, validation=False):
     """
@@ -105,7 +114,7 @@ def simple_process_data(path, features=None, validation=False):
             # episode data and have the same pick number as the csv label file in the folder above
             for datafile in csv_files:
                 indicies = [len(states[top_folder]), -1]
-                print('opening up name', datafile)
+                print('not opening up name', datafile)
                 with open(path + '/' + top_folder + '/' + folder + '/' + datafile, 'r') as csv_file:
                     reader = csv.reader(csv_file)
                     temp = False

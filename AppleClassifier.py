@@ -117,7 +117,7 @@ class AppleClassifier:
         print('test and train size', self.test_size, self.train_size)
         self.identifier = self.outputs
         self.generate_ID()
-        
+        self.label_times = []
         print('input size!!!!', self.input_dim)
 
     def load_dataset(self, train_data, test_data):
@@ -141,6 +141,7 @@ class AppleClassifier:
         self.FP_rate = temp_dict['FP']
         self.losses = temp_dict['loss']
         self.steps = temp_dict['steps']
+        self.train_accuracies = temp_dict['train_acc']
 
     def get_data_dict(self):
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
@@ -183,6 +184,7 @@ class AppleClassifier:
             net_loss = 0
             epoch_loss = 0
             step = 0
+            t0 = time.time()
             for x, label in self.train_data:
                 hiddens = self.model.init_hidden(np.shape(x)[0])
                 x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
@@ -216,6 +218,7 @@ class AppleClassifier:
                 net_loss += float(loss)
                 epoch_loss += float(loss)
                 step += 1
+            t1=time.time()
             acc, TP, FP = self.evaluate(0.5)
             train_acc, train_tp, train_fp = self.evaluate(0.5,'train')
             if epoch%10 ==0:
@@ -224,6 +227,8 @@ class AppleClassifier:
             if acc > backup_acc:
                 self.best_model = copy.deepcopy(self.model)
                 backup_acc = acc
+            t2 = time.time()
+#            print('times', t1-t0, t2-t1)
             self.accuracies.append(acc)
             self.losses.append(net_loss)
             self.steps.append(epoch)
@@ -279,6 +284,52 @@ class AppleClassifier:
             acc = 1 - np.count_nonzero(temp) / len(final_indexes)
             FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
+        elif self.eval_type == 'alt_last':
+            # this only works since all examples are the same length
+#            print(data_shape[1])
+            final_indexes = list(range(data_shape[1]-1, len(outputs), data_shape[1]))
+#            input(final_indexes)
+            last_ind_output = outputs[final_indexes]
+            last_ind_label = test_labels[final_indexes]
+#            last_ind_output.append(out.to('cpu').detach().numpy()[-1][0])
+#            last_ind_label.append(y.to('cpu').detach().numpy()[-1][0])
+            confident_area = ((last_ind_output >= 0.75) | (last_ind_output <= 0.25))
+#            print(confident_area)
+            temp = np.array(last_ind_label[confident_area]) - (np.array(last_ind_output[confident_area])>threshold) 
+#            print(last_ind_output[confident_area])
+#            print(last_ind_label[confident_area])
+#            print(temp)
+            acc = 1 - np.count_nonzero(temp) / len(final_indexes)
+            FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
+            TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
+        elif self.eval_type == 'pick':
+            final_indexes = [0]
+            final_indexes.extend(list(range(data_shape[1]-1, len(outputs), data_shape[1])))
+            # again, this will be nasty
+            label_data = {'classification':[], 'timestep':[]}
+            for i in range(len(final_indexes)-1):
+                for j in range(final_indexes[i],final_indexes[i+1]-5):
+                    timestep = final_indexes[i+1] - final_indexes[i]
+                    classification = True
+                    if all(outputs[j:j+5] < 0.25):
+                        classification = False
+                        timestep = j+5 - final_indexes[i]
+#                        print('confidently classified as failure')
+                        break
+                    # can remove this if we just want to predict failure
+                    elif all(outputs[j:j+5] > 0.75):
+                        classification = True
+                        timestep = j+5 - final_indexes[i]
+#                        print('confidently classified as success')
+                        break
+                label_data['classification'].append(classification)
+                label_data['timestep'].append(timestep)             
+            last_ind_label = test_labels[final_indexes[1:]]
+            temp = np.array(last_ind_label) - np.array(label_data['classification'])
+            acc = 1 - np.count_nonzero(temp) / len(last_ind_label)
+            FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
+            TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
+            self.label_times.append(label_data)
         else:
             output_data = outputs
             output_data = output_data > threshold
@@ -335,3 +386,4 @@ class AppleClassifier:
                            'train_acc': self.train_accuracies}
         file = open(filename + '.pkl', 'wb')
         pkl.dump(classifier_dict, file)
+        file.close()

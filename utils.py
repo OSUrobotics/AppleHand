@@ -15,15 +15,18 @@ import matplotlib.pyplot as plt
 class RNNDataset(IterableDataset):
     def __init__(self, state_list, label_list, batch_size, range_params=None):
         
-#        print('original list', state_list[0][0])
         self.label_list = label_list
         self.batch_size = batch_size
         
-        
-#        print('scaled list', self.state_list[0][0])
         try:
-            self.state_list, self.range_params = self.scale(state_list.copy(),range_params)
-            self.shape = (len(self.state_list), len(self.state_list[0]), len(self.state_list[0][0]))
+            if range_params == False:
+                print('WE ARENT NORMALIZING YOU DUMMY')
+                self.state_list = state_list.copy()
+                self.range_params = None
+                self.shape = (len(self.state_list), len(self.state_list[0]), len(self.state_list[0][0]))
+            else:
+                self.state_list, self.range_params = self.scale(state_list.copy(),range_params)
+                self.shape = (len(self.state_list), len(self.state_list[0]), len(self.state_list[0][0]))
             print('shape',self.shape)
         except IndexError:
             print('Database is None, building a dummy dataset')
@@ -68,6 +71,7 @@ class RNNDataset(IterableDataset):
             print('finding new range params')
             range_params={'top':[],'bot':[]}
             just_datapoints = unpack_arr(unscaled_list)
+#            print(just_datapoints)
             range_params['top'] = np.max(just_datapoints, axis=0)
             range_params['bot'] = np.min(just_datapoints, axis=0)
     
