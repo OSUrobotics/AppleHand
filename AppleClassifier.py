@@ -19,7 +19,7 @@ from utils import unpack_arr
 
 
 class AppleClassifier:
-    def __init__(self, train_dataset, test_dataset, param_dict, model=None):
+    def __init__(self, train_dataset, test_dataset, param_dict, model=None, validation_dataset=None):
         """
         A class for training, evaluating and generating plots of a classifier
         for apple pick data
@@ -28,7 +28,7 @@ class AppleClassifier:
         @param param_dict - Dictionary with parameters for model, training, etc
         for detail on acceptable parameters, look at valid_parameters.txt
         """
-        self.eval_type = 'last'
+        self.eval_type = 'pick'
         try:
             self.epochs = param_dict['epochs']
         except KeyError:
@@ -85,7 +85,14 @@ class AppleClassifier:
                                      batch_size=None)
         self.test_data = DataLoader(test_dataset, shuffle=False,
                                     batch_size=None)
-
+        if validation_dataset is not None:
+            self.validation_data = DataLoader(validation_dataset, shuffle=False,
+                                    batch_size=None)
+            self.validation_size = validation_dataset.shape
+            self.validation_accuracies = []
+        else:
+            self.validation_data = None
+            self.validation_size = None
         self.train_accuracies = []
         self.accuracies = []
         self.TP_rate = []
@@ -147,7 +154,7 @@ class AppleClassifier:
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,
                            'FP': self.FP_rate, 'ID': self.identifier,
-                           'train_acc': self.train_accuracies}
+                           'train_acc': self.train_accuracies, 'validation_acc': self.validation_accuracies}
         return classifier_dict.copy()
 
     def generate_ID(self):
@@ -221,9 +228,14 @@ class AppleClassifier:
             t1=time.time()
             acc, TP, FP = self.evaluate(0.25)
             train_acc, train_tp, train_fp = self.evaluate(0.25,'train')
+            if self.validation_data is not None:
+                validation_acc, validation_tp, validation_fp = self.evaluate(0.25,'validation')
+                self.validation_accuracies.append(validation_acc)
             if epoch%10 ==0:
                 print(f'epoch {epoch}: test accuracy  - {acc}, loss - {epoch_loss}, TP rate - {TP}, FP rate - {FP}')
                 print(f'epoch {epoch}: train accuracy - {train_acc}, train TP rate - {train_tp}, train FP rate - {train_fp}')
+                if self.validation_data is not None:
+                    print(f'epoch {epoch}: validation accuracy - {validation_acc}, val TP rate - {validation_tp}, val FP rate - {validation_fp}')
             if acc > backup_acc:
                 self.best_model = copy.deepcopy(self.model)
                 backup_acc = acc
@@ -235,6 +247,7 @@ class AppleClassifier:
             self.TP_rate.append(TP)
             self.FP_rate.append(FP)
             self.train_accuracies.append(train_acc)
+            
             net_loss = 0
         print(f'Finished training, best recorded model had acc = {backup_acc}')
         self.model = copy.deepcopy(self.best_model)
@@ -259,6 +272,9 @@ class AppleClassifier:
         elif test_set == 'train':
             data = self.train_data
             data_shape = self.train_size
+        elif test_set == 'validation':
+            data = self.validation_data
+            data_shape = self.validation_size
         for x, y in data:
             hidden_layer = model_to_test.init_hidden(np.shape(x)[0])
             # x = torch.tensor(x)
@@ -266,7 +282,8 @@ class AppleClassifier:
 #            print(np.shape(x))
             x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
             y = torch.reshape(y, (np.shape(y)[0], last_ind))
-            hidden_layer = tuple([e.data for e in hidden_layer])
+            if self.model_type == 'LSTM':
+                hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = model_to_test(x.to(self.device).float(), hidden_layer)
             count += 1
             outputs = np.append(outputs, out.to('cpu').detach().numpy())
@@ -305,6 +322,7 @@ class AppleClassifier:
         elif self.eval_type == 'pick':
             final_indexes = [0]
             final_indexes.extend(list(range(data_shape[1]-1, len(outputs), data_shape[1])))
+#            print(test_set, data_shape)
             # again, this will be nasty
             label_data = {'classification':[], 'timestep':[]}
             for i in range(len(final_indexes)-1):
@@ -383,7 +401,7 @@ class AppleClassifier:
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,
                            'FP': self.FP_rate, 'ID': self.identifier,
-                           'train_acc': self.train_accuracies}
+                           'train_acc': self.train_accuracies, 'validation_acc': self.validation_accuracies}
         file = open(filename + '.pkl', 'wb')
         pkl.dump(classifier_dict, file)
         file.close()

@@ -171,7 +171,10 @@ class ExperimentHandler():
         # Load policy if it exists, if not train a new one
 
         if self.args.policy is None or self.args.compare_policy:
-            classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
+            try:
+                classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args), validation_dataset=self.validation_dataset)
+            except AttributeError:
+                classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
             classifier.train()
             print('model finished, saving now')
             classifier.save_data()
@@ -234,8 +237,13 @@ class ExperimentHandler():
         for data in self.data_dict:
             plt.plot(data['steps'], data['acc'])
             plt.plot(data['steps'], data['train_acc'])
-            legend.append(data['ID'] + 'accuracy')
-            legend.append(data['ID'] + 'training accuracy')
+            try:
+                plt.plot(data['steps'], data['validation_acc'])
+            except:
+                pass
+            legend.append(data['ID'] + ' accuracy')
+            legend.append(data['ID'] + ' training accuracy')
+            legend.append(data['ID'] + ' validation accuracy')
         plt.legend(legend)
         plt.xlabel('Steps')
         plt.ylabel('Accuracy')
