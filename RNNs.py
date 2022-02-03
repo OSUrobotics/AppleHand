@@ -20,14 +20,20 @@ class GRUNet(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         
+        
+        
+        # Reduce complexity of inputs to RNN
+        RNN_in = 5
+        self.fl = nn.Linear(input_dim, RNN_in)
         self.network_type = network_type
-        self.gru = nn.GRU(input_dim, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
+        self.gru = nn.GRU(RNN_in, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
         self.fc = nn.Linear(hidden_dim, output_dim)
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
         
     def forward(self, x, h):
-        out, h = self.gru(x, h)
+        rnn_x = self.fl(x)
+        out, h = self.gru(rnn_x, h)
         out = self.fc(self.relu(out[:,-1]))
         if self.network_type == 'q':
             out = self.tanh(out)
@@ -43,14 +49,18 @@ class LSTMNet(nn.Module):
         super(LSTMNet, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-
+        
+        # Reduce complexity of inputs to RNN
+        RNN_in = 5
+        self.fl = nn.Linear(input_dim, RNN_in)
         self.grasp_flag = grasp_flag
-        self.lstm = nn.LSTM(input_dim, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
+        self.lstm = nn.LSTM(RNN_in, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
         self.fc = nn.Linear(hidden_dim, output_dim)
         self.relu = nn.ReLU()
         
     def forward(self, x, h):
-        out, h = self.lstm(x, h)
+        rnn_x = self.fl(x)
+        out, h = self.lstm(rnn_x, h)
         out = self.fc(self.relu(out[:,-1]))
         if not self.grasp_flag:
             out = self.tanh(out)

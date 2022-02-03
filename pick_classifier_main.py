@@ -40,18 +40,15 @@ class ExperimentHandler():
                       'Finger Effort': [14, 23, 32]}
         if self.args.data_path is not None:
             print('in data path part')
-            print(self.args.pick)
             if self.args.pick:
-                print('trying to process full test')
                 self.data_processor.process_full_test(self.args.data_path)
             else:
-                print('trying to process just grasp')
                 self.data_processor.process_data_iterable(self.args.data_path)
         if self.args.validation_path is not None:
             if self.args.pick:
-                self.data_processor.process_full_test(self.args.data_path, validate=True)
+                self.data_processor.process_full_test(self.args.validation_path, validate=True)
             else:
-                self.data_processor.process_data_iterable(self.args.data_path, validate=True)
+                self.data_processor.process_data_iterable(self.args.validation_path, validate=True)
 
         if self.args.pick:
             file = open('combined_train_test_dataset.pkl', 'rb')
@@ -61,6 +58,7 @@ class ExperimentHandler():
             if self.args.validate:
                 file = open('combined_validation_dataset.pkl', 'rb')
                 self.validation_data = pkl.load(file)
+#                print(self.validation_data)
                 self.validation_data = self.make_float(self.validation_data)
                 file.close()
         else:
@@ -92,7 +90,10 @@ class ExperimentHandler():
     @staticmethod
     def make_float(indict):
         for key in indict.keys():
-            indict[key] = indict[key].astype(float)
+            try:
+                indict[key] = indict[key].astype(float)
+            except AttributeError: 
+                pass
         return indict
 
     def build_dataset(self, validate=False):
@@ -397,7 +398,7 @@ class ExperimentHandler():
 
         self.figure_count += 1
 
-    def plot_episode(self):
+    def plot_example(self):
         legend = ['Correct Output']
         print('Plotting single episode')
         count = 0

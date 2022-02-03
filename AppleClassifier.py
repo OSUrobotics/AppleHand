@@ -28,7 +28,7 @@ class AppleClassifier:
         @param param_dict - Dictionary with parameters for model, training, etc
         for detail on acceptable parameters, look at valid_parameters.txt
         """
-        self.eval_type = 'last'
+        self.eval_type = 'pick'
         try:
             self.epochs = param_dict['epochs']
         except KeyError:
@@ -170,8 +170,8 @@ class AppleClassifier:
         optim = torch.optim.Adam(self.model.parameters(), lr=0.001)
         self.model.train()
         print('starting training, finding the starting accuracy for random model of type', self.outputs)
-        acc, TP, FP = self.evaluate(0.5)
-        train_acc, _, _ = self.evaluate(0.5, 'train')
+        acc, TP, FP = self.evaluate(0.25)
+        train_acc, _, _ = self.evaluate(0.25, 'train')
         print(f'starting: accuracy - {acc}, TP rate - {TP}, FP rate - {FP}')
         self.accuracies.append(acc)
         self.train_accuracies.append(train_acc)
@@ -219,8 +219,8 @@ class AppleClassifier:
                 epoch_loss += float(loss)
                 step += 1
             t1=time.time()
-            acc, TP, FP = self.evaluate(0.5)
-            train_acc, train_tp, train_fp = self.evaluate(0.5,'train')
+            acc, TP, FP = self.evaluate(0.25)
+            train_acc, train_tp, train_fp = self.evaluate(0.25,'train')
             if epoch%10 ==0:
                 print(f'epoch {epoch}: test accuracy  - {acc}, loss - {epoch_loss}, TP rate - {TP}, FP rate - {FP}')
                 print(f'epoch {epoch}: train accuracy - {train_acc}, train TP rate - {train_tp}, train FP rate - {train_fp}')
@@ -311,17 +311,17 @@ class AppleClassifier:
                 for j in range(final_indexes[i],final_indexes[i+1]-5):
                     timestep = final_indexes[i+1] - final_indexes[i]
                     classification = True
-                    if all(outputs[j:j+5] < 0.25):
+                    if all(outputs[j:j+5] < threshold):
                         classification = False
                         timestep = j+5 - final_indexes[i]
 #                        print('confidently classified as failure')
                         break
                     # can remove this if we just want to predict failure
-                    elif all(outputs[j:j+5] > 0.75):
-                        classification = True
-                        timestep = j+5 - final_indexes[i]
+#                    elif all(outputs[j:j+5] > 0.75):
+#                        classification = True
+#                        timestep = j+5 - final_indexes[i]
 #                        print('confidently classified as success')
-                        break
+#                        break
                 label_data['classification'].append(classification)
                 label_data['timestep'].append(timestep)             
             last_ind_label = test_labels[final_indexes[1:]]
