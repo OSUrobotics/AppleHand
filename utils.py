@@ -27,7 +27,7 @@ class RNNDataset(IterableDataset):
             else:
                 self.state_list, self.range_params = self.scale(state_list.copy(),range_params)
                 self.shape = (len(self.state_list), len(self.state_list[0]), len(self.state_list[0][0]))
-            print('shape',self.shape)
+#            print('shape',self.shape)
         except IndexError:
             print('Database is None, building a dummy dataset')
             self.shape = (0,0,0)
@@ -36,6 +36,7 @@ class RNNDataset(IterableDataset):
             print('Database is None, not scaling it and building a dummy dataset')
             self.shape=(0,0,0)
             self.state_list = state_list
+#        print(type(state_list))
     def divide_into_batches(self, state, label):
         for i in range(0, len(state), self.batch_size):
             yield state[i:i + self.batch_size], label[i:i + self.batch_size]
@@ -46,13 +47,19 @@ class RNNDataset(IterableDataset):
         batched_data = list(self.divide_into_batches(shuffled_state, shuffled_label))
         shuffled_state = [np.concatenate(arr_list[0]) for arr_list in batched_data]
         shuffled_label = [np.concatenate(arr_list[1]) for arr_list in batched_data]
-        return shuffled_state, shuffled_label
+        lens = []
+        for arr_list in batched_data:
+#            print(len(arr_list[0]))
+            temp = [len(arr_list[0][i]) for i in range(len(arr_list[0]))]
+            lens.append(temp)
+#        input(lens)
+        return shuffled_state, shuffled_label, lens
 
     def get_episodes(self):
-        states, labels = self.shuffled_episodes
+        states, labels, lens = self.shuffled_episodes
         state_iter = iter(states)
         label_iter = iter(labels)
-        return zip(state_iter, label_iter)
+        return zip(state_iter, label_iter, lens)
 
     def get_params(self):
         return self.range_params
@@ -65,10 +72,10 @@ class RNNDataset(IterableDataset):
 
     @staticmethod
     def scale(unscaled_list, range_params=None):
-        print('normalizing the parameters!')
+#        print('normalizing the parameters!')
         #warning, this will be ugly because i am making it with the idea that the sublists are of arbitrary length
         if range_params is None:
-            print('finding new range params')
+#            print('finding new range params')
             range_params={'top':[],'bot':[]}
             just_datapoints = unpack_arr(unscaled_list)
 #            print(just_datapoints)

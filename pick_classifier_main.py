@@ -22,7 +22,7 @@ import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import metrics
 import datetime
-
+from copy import deepcopy
 
 class ExperimentHandler():
     def __init__(self):
@@ -53,7 +53,10 @@ class ExperimentHandler():
         if self.args.pick:
             file = open('combined_train_test_dataset.pkl', 'rb')
             self.test_data = pkl.load(file)
+            print(np.shape(self.test_data['train_state']))
             self.test_data = self.make_float(self.test_data)
+            print(np.shape(self.test_data['train_state']))
+            print(len(self.test_data['train_state'][0]))
             file.close()
             if self.args.validate:
                 file = open('combined_validation_dataset.pkl', 'rb')
@@ -96,9 +99,13 @@ class ExperimentHandler():
                 pass
         return indict
 
+#    def split_database(self):
+#        # purpose of this is to build a training/testing set based on the real world examples
+
     def build_dataset(self, validate=False):
         params = None
         if validate:
+            print('validation')
             params = np.load('proxy_mins_and_maxs.npy', allow_pickle=True)
             params = params.item()
             if self.args.used_features is None:
@@ -109,6 +116,9 @@ class ExperimentHandler():
                     used_labels.extend(self.labels[label])
                 self.validation_dataset = RNNDataset(list(np.array(self.validation_data['test_state'])[:, :, used_labels]), self.validation_data['test_label'], self.args.batch_size, range_params=params)
         else:
+            print('train then test')
+            print(np.shape(self.test_data['train_state']))
+            print(len(self.test_data['train_state'][0]))
             if self.args.used_features is None:    
                 self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
@@ -118,9 +128,22 @@ class ExperimentHandler():
                 used_labels = []
                 for label in self.args.used_features:
                     used_labels.extend(self.labels[label])
-                self.train_dataset = RNNDataset(list(np.array(self.test_data['train_state'])[:, :, used_labels]), self.test_data['train_label'], self.args.batch_size, range_params=params)
+                train_state_data = deepcopy(self.test_data['train_state'])
+                test_state_data = deepcopy(self.test_data['test_state'])
+                for episode in range(len(self.test_data['train_state'])):
+                    for tstep in range(len(self.test_data['train_state'][episode])):
+                        train_state_data[episode][tstep]= [train_state_data[episode][tstep][used_label] for used_label in used_labels]
+                for episode in range(len(self.test_data['test_state'])):
+                    for tstep in range(len(self.test_data['test_state'][episode])):
+                        test_state_data[episode][tstep]= [test_state_data[episode][tstep][used_label] for used_label in used_labels]
+                self.train_dataset = RNNDataset(train_state_data, self.test_data['train_label'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
-                self.test_dataset = RNNDataset(list(np.array(self.test_data['test_state'])[:, :, used_labels]), self.test_data['test_label'], self.args.batch_size, range_params=params)
+                self.test_dataset = RNNDataset(test_state_data, self.test_data['test_label'], self.args.batch_size, range_params=params)
+                
+                
+#                self.train_dataset = RNNDataset(list(np.array(self.test_data['train_state'])[:, :, used_labels]), self.test_data['train_label'], self.args.batch_size, range_params=params)
+#                params = self.train_dataset.get_params()
+#                self.test_dataset = RNNDataset(list(np.array(self.test_data['test_state'])[:, :, used_labels]), self.test_data['test_label'], self.args.batch_size, range_params=params)
             np.save('proxy_mins_and_maxs',params)
 
     def setup_args(self, args=None):
@@ -226,8 +249,8 @@ class ExperimentHandler():
         plt.show()
 
         # Perform ablation on feature groups if desired
-#        if self.args.ablate:
-#            perform_ablation(pick_data, self.args)
+        if self.args.ablate:
+            perform_ablation(self.test_data, self.args, self.validation_data)
 
 
     def plot_acc(self):
@@ -238,7 +261,8 @@ class ExperimentHandler():
             plt.plot(data['steps'], data['acc'])
             plt.plot(data['steps'], data['train_acc'])
             try:
-                plt.plot(data['steps'], data['validation_acc'])
+#                print(data['validation_acc'])
+                plt.plot(data['steps'][1:], data['validation_acc'])
             except:
                 pass
             legend.append(data['ID'] + ' accuracy')
@@ -269,6 +293,11 @@ class ExperimentHandler():
         print('Plotting true positive and false positive rate over time')
         TPFP_plot = plt.figure(self.figure_count)
         for data in self.data_dict:
+#            temp = np.array(data['TP'])/(np.array(data['TP'])+np.array(data['FP']))
+#            temp[np.isnan(temp)] = -1
+#            armax = np.argmax(temp)
+#            print('tp and fp for max precision',data['TP'][armax], data['FP'][armax])
+#            input('max precision ' + str(np.max(temp)))
             plt.plot(data['steps'], data['TP'])
             plt.plot(data['steps'], data['FP'])
             legend.append('TP_' + data['ID'])

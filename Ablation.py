@@ -12,8 +12,9 @@ import datetime
 from AppleClassifier import AppleClassifier
 from utils import RNNDataset
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
-def perform_ablation(database, args):
+def perform_ablation(database, args, validation=None):
     """
     Function to perform an ablation study to determine which feature is the
     most important for the classification
@@ -56,13 +57,21 @@ def perform_ablation(database, args):
     sizes = [33]
     full_train_loader = RNNDataset(database['train_state'], database['train_label'], args.batch_size)
     full_test_loader = RNNDataset(database['test_state'], database['test_label'], args.batch_size)
+    if validation is not None:
+        validation_loader = RNNDataset(validation['test_state'], validation['test_label'], args.batch_size)
+    else:
+        validation_loader = None
     performance = []
     for i in range(3):
-        full_lstm = AppleClassifier(full_train_loader, full_test_loader,
-                                    vars(args))
+        full_lstm = AppleClassifier(full_train_loader, full_test_loader, vars(args), validation_dataset=validation_loader)
         full_lstm.train()
-        performance = np.max(full_lstm.accuracies)
-        print('model finished, saving now')
+        roc_max_acc = []
+        for i in range(21):
+            roc_acc, _, _ = full_lstm.evaluate(i*0.05, 'test')
+            roc_max_acc.append(roc_acc)
+        performance = np.max(roc_max_acc)
+        print('model finished, saving now.')
+#        print('performance: ', performance)
         full_lstm.save_data()
     best_accuracies = [np.average(performance)]
     best_acc_std_dev = [np.std(best_accuracies)]
@@ -79,17 +88,40 @@ def perform_ablation(database, args):
             except:
                 pass
             used_labels = full_list[temp]
-            reduced_train_dataset = RNNDataset(list(np.array(database['train_state'])[:, :, used_labels]), database['train_label'], args.batch_size)
-            reduced_test_dataset = RNNDataset(list(np.array(database['test_state'])[:, :, used_labels]), database['test_label'], args.batch_size)
+            
+            train_state_data = deepcopy(database['train_state'])
+            test_state_data = deepcopy(database['test_state'])
+            validation_dataloader = deepcopy(validation['test_state'])
+            
+            for episode in range(len(database['train_state'])):
+                for tstep in range(len(database['train_state'][episode])):
+                    train_state_data[episode][tstep] = [train_state_data[episode][tstep][used_label] for used_label in used_labels]
+            for episode in range(len(database['test_state'])):
+                for tstep in range(len(database['test_state'][episode])):
+                    test_state_data[episode][tstep] = [test_state_data[episode][tstep][used_label] for used_label in used_labels]
+            for episode in range(len(validation['test_state'])):
+                for tstep in range(len(validation['test_state'][episode])):
+                    validation_dataloader[episode][tstep] = [validation_dataloader[episode][tstep][used_label] for used_label in used_labels]
+
+            reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], args.batch_size)
+            reduced_test_dataset = RNNDataset(test_state_data, database['test_label'], args.batch_size)
+            reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], args.batch_size)
+            
             args.input_dim = len(used_labels)
             print('using this many labels', len(used_labels))
             performance = []
             for i in range(3):
                 base_lstm = AppleClassifier(reduced_train_dataset,
-                                            reduced_test_dataset, vars(args))
+                                            reduced_test_dataset, vars(args),validation_dataset=reduced_validation_dataset)
                 base_lstm.train()
-                performance.append(np.max(base_lstm.accuracies))
+                roc_max_acc = []
+                for i in range(21):
+                    roc_acc, _, _ = base_lstm.evaluate(i*0.05,'test')
+                    roc_max_acc.append(roc_acc)
+#                print('roc max acc: ', roc_max_acc)
+                performance.append(np.max(roc_max_acc))
                 print('model finished, saving now')
+#                print('performance: ', performance)
                 base_lstm.save_data()
             feature_combo_accuracies.append(np.average(performance))
             acc_std_dev.append(np.std(performance))
@@ -99,6 +131,10 @@ def perform_ablation(database, args):
         print('')
         print('best combination', best_one, np.max(feature_combo_accuracies), np.shape(names))
         print('')
+#        print('lets just throw the data up here')
+#        print('performance: ', performance)
+#        print('feature combo accuracies: ', feature_combo_accuracies)
+#        print('best name: ', names[best_one])
         missing_names = missing_names + names[best_one]
         missing_labels.extend(indexes[best_one])
         best_accuracies.append(feature_combo_accuracies[best_one])
@@ -106,6 +142,7 @@ def perform_ablation(database, args):
         worst_names.append(names[best_one])
         sizes.append(sizes[phase] - len(labels[names[best_one]]))
         labels.pop(names[best_one])
+#        print('best accuracies: ', best_accuracies)
     print('ablation finished. best accuracies throughout were', best_accuracies)
     print('names removed in this order', worst_names)
 

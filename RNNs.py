@@ -15,12 +15,10 @@ else:
     device = torch.device("cpu")
     
 class GRUNet(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, n_layers, drop_prob=0.2,network_type = 'aa'):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_layers, drop_prob=0.2, network_type = 'aa'):
         super(GRUNet, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-        
-        
         
         # Reduce complexity of inputs to RNN
         RNN_in = 5
@@ -35,6 +33,7 @@ class GRUNet(nn.Module):
         rnn_x = self.fl(x)
         out, h = self.gru(rnn_x, h)
         out = self.fc(self.relu(out[:,-1]))
+        out = self.sig(out)
         if self.network_type == 'q':
             out = self.tanh(out)
         return out, h
@@ -57,11 +56,13 @@ class LSTMNet(nn.Module):
         self.lstm = nn.LSTM(RNN_in, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
         self.fc = nn.Linear(hidden_dim, output_dim)
         self.relu = nn.ReLU()
+        self.sig = nn.Sigmoid()
         
     def forward(self, x, h):
         rnn_x = self.fl(x)
         out, h = self.lstm(rnn_x, h)
         out = self.fc(self.relu(out[:,-1]))
+        out = self.sig(out)
         if not self.grasp_flag:
             out = self.tanh(out)
         return out, h

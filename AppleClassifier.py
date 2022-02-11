@@ -28,7 +28,7 @@ class AppleClassifier:
         @param param_dict - Dictionary with parameters for model, training, etc
         for detail on acceptable parameters, look at valid_parameters.txt
         """
-        self.eval_type = 'pick'
+        self.eval_type = 'last'
         try:
             self.epochs = param_dict['epochs']
         except KeyError:
@@ -42,7 +42,7 @@ class AppleClassifier:
         except KeyError:
             self.layers = 4
         try:
-            self.hidden = param_dict['hidden']
+            self.hidden = param_dict['hiddens']
         except KeyError:
             self.hidden = 100
         try:
@@ -90,9 +90,11 @@ class AppleClassifier:
                                     batch_size=None)
             self.validation_size = validation_dataset.shape
             self.validation_accuracies = []
+            print('validation size', self.validation_size)
         else:
             self.validation_data = None
             self.validation_size = None
+            self.validation_accuracies = []
         self.train_accuracies = []
         self.accuracies = []
         self.TP_rate = []
@@ -126,6 +128,11 @@ class AppleClassifier:
         self.generate_ID()
         self.label_times = []
         print('input size!!!!', self.input_dim)
+#        print('number of weights in model calculation', self.hidden*self.hidden*self.layers + self.input_dim*3)
+        print('number of weights in model', self.count_parameters())
+
+    def count_parameters(self): 
+        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
     def load_dataset(self, train_data, test_data):
         self.train_data = DataLoader(train_data, shuffle=False,
@@ -149,6 +156,10 @@ class AppleClassifier:
         self.losses = temp_dict['loss']
         self.steps = temp_dict['steps']
         self.train_accuracies = temp_dict['train_acc']
+        try:
+            self.validation_accuracies = temp_dict['validation_acc']
+        except KeyError:
+            pass
 
     def get_data_dict(self):
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
@@ -177,8 +188,8 @@ class AppleClassifier:
         optim = torch.optim.Adam(self.model.parameters(), lr=0.001)
         self.model.train()
         print('starting training, finding the starting accuracy for random model of type', self.outputs)
-        acc, TP, FP = self.evaluate(0.25)
-        train_acc, _, _ = self.evaluate(0.25, 'train')
+        acc, TP, FP = self.evaluate(0.5)
+        train_acc, _, _ = self.evaluate(0.5, 'train')
         print(f'starting: accuracy - {acc}, TP rate - {TP}, FP rate - {FP}')
         self.accuracies.append(acc)
         self.train_accuracies.append(train_acc)
@@ -192,7 +203,7 @@ class AppleClassifier:
             epoch_loss = 0
             step = 0
             t0 = time.time()
-            for x, label in self.train_data:
+            for x, label, _ in self.train_data:
                 hiddens = self.model.init_hidden(np.shape(x)[0])
                 x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
                 # label = torch.tensor(label)
@@ -226,16 +237,16 @@ class AppleClassifier:
                 epoch_loss += float(loss)
                 step += 1
             t1=time.time()
-            acc, TP, FP = self.evaluate(0.25)
-            train_acc, train_tp, train_fp = self.evaluate(0.25,'train')
+            acc, TP, FP = self.evaluate(0.5)
+            train_acc, train_tp, train_fp = self.evaluate(0.5,'train')
             if self.validation_data is not None:
-                validation_acc, validation_tp, validation_fp = self.evaluate(0.25,'validation')
+                validation_acc, validation_tp, validation_fp = self.evaluate(0.5,'validation')
                 self.validation_accuracies.append(validation_acc)
-            if epoch%10 ==0:
-                print(f'epoch {epoch}: test accuracy  - {acc}, loss - {epoch_loss}, TP rate - {TP}, FP rate - {FP}')
-                print(f'epoch {epoch}: train accuracy - {train_acc}, train TP rate - {train_tp}, train FP rate - {train_fp}')
+            if epoch%100 ==0:
+                print(f'epoch {epoch}: test accuracy  - {max(self.accuracies[epoch-100:epoch])}, loss - {sum(self.losses[epoch-100:epoch])}, TP rate - {max(self.TP_rate[epoch-100:epoch])}, FP rate - {min(self.FP_rate[epoch-100:epoch])}')
+                print(f'epoch {epoch}: train accuracy - {max(self.train_accuracies[epoch-100:epoch])}, train TP rate - {train_tp}, train FP rate - {train_fp}')
                 if self.validation_data is not None:
-                    print(f'epoch {epoch}: validation accuracy - {validation_acc}, val TP rate - {validation_tp}, val FP rate - {validation_fp}')
+                    print(f'epoch {epoch}: validation accuracy - {max(self.validation_accuracies[epoch-100:epoch])}, val TP rate - {validation_tp}, val FP rate - {validation_fp}')
             if acc > backup_acc:
                 self.best_model = copy.deepcopy(self.model)
                 backup_acc = acc
@@ -247,7 +258,6 @@ class AppleClassifier:
             self.TP_rate.append(TP)
             self.FP_rate.append(FP)
             self.train_accuracies.append(train_acc)
-            
             net_loss = 0
         print(f'Finished training, best recorded model had acc = {backup_acc}')
         self.model = copy.deepcopy(self.best_model)
@@ -266,6 +276,7 @@ class AppleClassifier:
         count = 0
         last_ind_output = []
         last_ind_label = []
+        final_indexes = []
         if test_set == 'test':
             data = self.test_data
             data_shape = self.test_size
@@ -275,29 +286,38 @@ class AppleClassifier:
         elif test_set == 'validation':
             data = self.validation_data
             data_shape = self.validation_size
-        for x, y in data:
+        for x, y, lens in data:
             hidden_layer = model_to_test.init_hidden(np.shape(x)[0])
             # x = torch.tensor(x)
             # y = torch.tensor(y)
-#            print(np.shape(x))
+            
+#            input(lens)
+            final_indexes.extend(lens)
             x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
             y = torch.reshape(y, (np.shape(y)[0], last_ind))
             if self.model_type == 'LSTM':
                 hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = model_to_test(x.to(self.device).float(), hidden_layer)
+#            print(np.shape(out))
             count += 1
             outputs = np.append(outputs, out.to('cpu').detach().numpy())
             test_labels = np.append(test_labels, y.to('cpu').detach().numpy())
         if self.eval_type == 'last':
+#            input(final_indexes)
+            final_indexes = [sum(final_indexes[:i])-1 for i in range(1,len(final_indexes)+1)]
+#            input(final_indexes)
+            
             # this only works since all examples are the same length
-#            print(data_shape[1])
-            final_indexes = list(range(data_shape[1]-1, len(outputs), data_shape[1]))
+#            final_indexes = list(range(data_shape[1]-1, len(outputs), data_shape[1]))
 #            input(final_indexes)
             last_ind_output = outputs[final_indexes]
             last_ind_label = test_labels[final_indexes]
+#            print(last_ind_label)
 #            last_ind_output.append(out.to('cpu').detach().numpy()[-1][0])
 #            last_ind_label.append(y.to('cpu').detach().numpy()[-1][0])
             temp = np.array(last_ind_label) - (np.array(last_ind_output)>threshold) 
+#            print('num final indexes',len(final_indexes))
+#            print('nonzero final inds', np.count_nonzero(last_ind_label), ' final inds ' , len(last_ind_label))
             acc = 1 - np.count_nonzero(temp) / len(final_indexes)
             FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
@@ -320,8 +340,7 @@ class AppleClassifier:
             FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
         elif self.eval_type == 'pick':
-            final_indexes = [0]
-            final_indexes.extend(list(range(data_shape[1]-1, len(outputs), data_shape[1])))
+            final_indexes = [sum(final_indexes[:i])-1 for i in range(1,len(final_indexes)+1)]
 #            print(test_set, data_shape)
             # again, this will be nasty
             label_data = {'classification':[], 'timestep':[]}
@@ -375,7 +394,8 @@ class AppleClassifier:
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
         x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
         y = torch.reshape(y, (np.shape(y)[0], last_ind))
-        hidden_layer = tuple([e.data for e in hidden_layer])
+        if self.model_type=='LSTM':
+            hidden_layer = tuple([e.data for e in hidden_layer])
         out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
         outputs = out.to('cpu').detach().numpy()
         self.model.train()

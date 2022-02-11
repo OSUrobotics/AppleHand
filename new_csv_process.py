@@ -11,7 +11,7 @@ import numpy as np
 import pickle as pkl
 import csv
 from utils import unpack_arr
-
+from copy import deepcopy
 
 class GraspProcessor():
     def __init__(self):
@@ -19,11 +19,11 @@ class GraspProcessor():
         self.test_pick_data = {}
         self.validation_grasp_data = {}
         self.validation_pick_data = {}
-        self.csv_order = {'training_set':{'successful':[],'failed':[]},'test_set':{'successful':[],'failed':[]}}
+        self.csv_order = {'training_set':{'successful':[],'failed':[], 'could_be_success':[]},'test_set':{'successful':[],'failed':[], 'could_be_success':[]}}
 
         self.top_level = ['training_set', 'test_set']
         self.mid_level = 'pp4_folders_labeled'
-        self.bot_level = ['successful', 'failed']
+        self.bot_level = ['successful', 'failed', 'could_be_success']
         self.data_labels = {'Arm Force': [0, 1, 2],
                             'Arm Torque': [3, 4, 5],
                             'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
@@ -33,7 +33,7 @@ class GraspProcessor():
                             'Finger Effort': [14, 23, 32]}
 
     def process_full_test(self, path, validate=False):
-        self.csv_order = {'training_set':{'successful':[],'failed':[]},'test_set':{'successful':[],'failed':[]}}
+        self.csv_order = {'training_set':{'successful':[],'failed':[], 'could_be_success':[]},'test_set':{'successful':[],'failed':[], 'could_be_success':[]}}
         self.process_data_iterable(path + '/GRASP', validate)
         self.process_data_pick(path + '/PICK', validate)
         if validate:
@@ -50,19 +50,25 @@ class GraspProcessor():
                 print()
                 print('all files saved')
         else:
+#            try:
             combined_data = self.test_grasp_data.copy()
-            combined_data['test_state'] = np.append(self.test_grasp_data['test_state'],self.test_pick_data['test_state'], axis=1)
-            combined_data['test_label'] = np.append(self.test_grasp_data['test_label'],self.test_pick_data['test_label'], axis=1)
-            combined_data['train_state'] = np.append(self.test_grasp_data['train_state'],self.test_pick_data['train_state'], axis=1)
-            combined_data['train_label'] = np.append(self.test_grasp_data['train_label'],self.test_pick_data['train_label'], axis=1)
-#            for i in range(len(combined_data['test_state'])):
-#
-#                combined_data['test_state'][i].extend(self.test_pick_data['test_state'][i])
-#                combined_data['test_label'][i].extend(self.test_pick_data['test_label'][i])
-#            for i in range(len(combined_data['train_state'])):
+#            print(np.shape(combined_data['train_state']),np.shape(combined_data['train_state'][0]))
+#            combined_data['test_state'] = np.append(self.test_grasp_data['test_state'],self.test_pick_data['test_state'], axis=1)
+#            combined_data['test_label'] = np.append(self.test_grasp_data['test_label'],self.test_pick_data['test_label'], axis=1)
+#            combined_data['train_state'] = np.append(self.test_grasp_data['train_state'],self.test_pick_data['train_state'], axis=1)
+#            combined_data['train_label'] = np.append(self.test_grasp_data['train_label'],self.test_pick_data['train_label'], axis=1)
+#            except np.AxisError:
+##            print('got an axis error, trying alt strats')
+#            combined_data = self.test_grasp_data.copy()
+            for i in range(len(combined_data['test_state'])):
 #                print(combined_data['test_state'][i])
-#                combined_data['train_state'][i].extend(self.test_pick_data['train_state'][i])
-#                combined_data['train_state'][i].extend(self.test_pick_data['train_state'][i])        
+                combined_data['test_state'][i].extend(self.test_pick_data['test_state'][i])
+                combined_data['test_label'][i].extend(self.test_pick_data['test_label'][i])
+            for i in range(len(combined_data['train_state'])):
+                combined_data['train_state'][i].extend(self.test_pick_data['train_state'][i])
+                combined_data['train_label'][i].extend(self.test_pick_data['train_label'][i]) 
+#            print(type(combined_data['train_state']),type(combined_data['train_state'][0]))
+#            print(np.shape(combined_data['train_state']),np.shape(combined_data['train_state'][0]))
             with open('combined_train_test_dataset.pkl', 'wb') as file:
                 pkl.dump(combined_data, file)
                 file.close()
@@ -78,7 +84,7 @@ class GraspProcessor():
         ncount = 0
         states = {'training_set': [], 'test_set': []}
         labels = {'training_set': [], 'test_set': []}
-        final_csv_order = {'training_set':{'successful':[],'failed':[]},'test_set':{'successful':[],'failed':[]}}
+        final_csv_order = {'training_set':{'successful':[],'failed':[], 'could_be_success':[]},'test_set':{'successful':[],'failed':[], 'could_be_success':[]}}
 
         # This loop iterates through all the folders in the path folder, which contains different folders for each set of starting noises
         for top_folder in self.top_level:
@@ -92,33 +98,42 @@ class GraspProcessor():
                 for datafile in self.csv_order[top_folder][folder]:
                     realfile = datafile.replace('grasp','pick')
                     episode_state = []
-                    print('Opening up name', realfile)
+#                    print('Opening up name', realfile)
                     with open(path + '/'  + self.mid_level + '/' + top_folder + '/' + folder + '/' + realfile, 'r') as csv_file:
                         reader = csv.reader(csv_file)
                         temp = False
                         for row in reader:
                             if temp:
-                                episode_state.append(row[1:])
+                                episode_state.append(list(row[1:]))
                             else:
                                 temp = True
                     if len(episode_state) > 0:
                         e_len =len(episode_state)
+                        episode_state = np.array(episode_state)
+                        episode_state = episode_state.astype(float)
+                        episode_state = episode_state.tolist()
                         if folder == 'successful':
                             episode_label = [1] * int(e_len)
                             labels[top_folder].append(episode_label)
                             pcount += 1
-                        else:
+                        elif folder == 'failed':
                             episode_label = [0] * int(e_len)
                             labels[top_folder].append(episode_label)
                             ncount += 1
-#                            print(top_folder)
-    #                    input(episode_label)
+                        else:
+                            episode_label = [1] * int(e_len)
+                            labels[top_folder].append(episode_label)
+                            pcount += 1#                            print(top_folder)
+#                        input(episode_state.copy())
                         states[top_folder].append(episode_state.copy())
                         final_csv_order[top_folder][folder].append(datafile)
         if self.csv_order != final_csv_order:
-            print('pick csv order issue, original csv order: ',self.csv_order, 'new order: ', final_csv_order)
+            print('pick csv order issue, original csv order: ', self.csv_order, 'new order: ', final_csv_order)
+#        print(type(states['training_set']))
+#        input(states['training_set'][0])
         data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
                      'test_state': states['test_set'], 'test_label': labels['test_set']}
+#        input(states['training_set'])
         if validate:
             file=open('validation_pick_dataset.pkl','wb')
             self.validation_pick_data = data_file.copy()
@@ -142,7 +157,7 @@ class GraspProcessor():
 
         # This loop iterates through all the folders in the path folder,
         # which contains different folders for each set of starting noises
-        final_csv_order = {'training_set':{'successful':[],'failed':[]},'test_set':{'successful':[],'failed':[]}}
+        final_csv_order = {'training_set':{'successful':[],'failed':[], 'could_be_success':[]},'test_set':{'successful':[],'failed':[], 'could_be_success':[]}}
         for top_folder in self.top_level:
             for folder in self.bot_level:
                 if len(self.csv_order[top_folder][folder]) == 0:
@@ -154,19 +169,20 @@ class GraspProcessor():
                 
                 for datafile in self.csv_order[top_folder][folder]:
                     episode_state = []
-                    print('Opening up name', datafile)
+#                    print('Opening up name', datafile)
                     with open(path + '/'  + self.mid_level + '/' + top_folder + '/' + folder + '/' + datafile, 'r') as csv_file:
                         reader = csv.reader(csv_file)
                         temp = False
                         for row in reader:
                             if temp:
-                                episode_state.append(row[1:])
+                                episode_state.append(list(row[1:]))
                             else:
                                 temp = True
                     if len(episode_state) > 0:
                         e_len = len(episode_state)
                         episode_state = np.array(episode_state)
                         episode_state = episode_state.astype(float)
+                        episode_state = episode_state.tolist()
                         episode_label = [0.5] * int(e_len/4)
                         if folder == 'successful':
                             middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
@@ -174,20 +190,25 @@ class GraspProcessor():
                             episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
                             labels[top_folder].append(episode_label)
                             pcount += 1
-                        else:
+                        elif folder == 'failed':
                             middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * -0.5 + 0.5
                             episode_label.extend(middle_label)
                             episode_label.extend([0] * int(e_len-int(e_len/4)-int(e_len/2)))
                             labels[top_folder].append(episode_label)
                             ncount += 1
+                        else:
+                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
+                            episode_label.extend(middle_label)
+                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+                            labels[top_folder].append(episode_label)
 #                            print(top_folder)
-    #                    input(episode_label)
                         states[top_folder].append(episode_state.copy())
                         final_csv_order[top_folder][folder].append(datafile)
         if self.csv_order != final_csv_order:
             print('grasp csv order issue, original csv order: ',self.csv_order, 'new order: ', final_csv_order)
         data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
                      'test_state': states['test_set'], 'test_label': labels['test_set']}
+#        input(states['training_set'])
         if validate:
             file=open('validation_grasp_dataset.pkl','wb')
             self.validation_grasp_data = data_file.copy()
