@@ -66,6 +66,7 @@ class ExperimentHandler():
                 file.close()
         else:
             file = open('apple_grasp_dataset.pkl', 'rb')
+            print('opening apple grasp datset')
             self.test_data = pkl.load(file)
             self.test_data = self.make_float(self.test_data)
             file.close()
@@ -84,6 +85,7 @@ class ExperimentHandler():
 
         self.classifiers = []
         self.data_dict = []
+        self.figure_count = 1
 
     @staticmethod
     def make_data_name(model_name):
@@ -109,20 +111,20 @@ class ExperimentHandler():
             params = np.load('proxy_mins_and_maxs.npy', allow_pickle=True)
             params = params.item()
             if self.args.used_features is None:
-                self.validation_dataset = RNNDataset(self.validation_data['test_state'], self.validation_data['test_label'], self.args.batch_size, range_params=params)
+                self.validation_dataset = RNNDataset(self.validation_data['test_state'], self.validation_data['test_label'], self.validation_data['pick_title'], self.args.batch_size, range_params=params)
             else:
                 used_labels = []
                 for label in self.args.used_features:
                     used_labels.extend(self.labels[label])
-                self.validation_dataset = RNNDataset(list(np.array(self.validation_data['test_state'])[:, :, used_labels]), self.validation_data['test_label'], self.args.batch_size, range_params=params)
+                self.validation_dataset = RNNDataset(list(np.array(self.validation_data['test_state'])[:, :, used_labels]), self.validation_data['test_label'], self.validation_data['pick_title'], self.args.batch_size, range_params=params)
         else:
             print('train then test')
             print(np.shape(self.test_data['train_state']))
             print(len(self.test_data['train_state'][0]))
             if self.args.used_features is None:    
-                self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'], self.args.batch_size, range_params=params)
+                self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
-                self.test_dataset = RNNDataset(self.test_data['test_state'], self.test_data['test_label'], self.args.batch_size, range_params=params)
+                self.test_dataset = RNNDataset(self.test_data['test_state'], self.test_data['test_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
                 np.save('proxy_mins_and_maxs', params)
             else:
                 used_labels = []
@@ -136,9 +138,9 @@ class ExperimentHandler():
                 for episode in range(len(self.test_data['test_state'])):
                     for tstep in range(len(self.test_data['test_state'][episode])):
                         test_state_data[episode][tstep]= [test_state_data[episode][tstep][used_label] for used_label in used_labels]
-                self.train_dataset = RNNDataset(train_state_data, self.test_data['train_label'], self.args.batch_size, range_params=params)
+                self.train_dataset = RNNDataset(train_state_data, self.test_data['train_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
-                self.test_dataset = RNNDataset(test_state_data, self.test_data['test_label'], self.args.batch_size, range_params=params)
+                self.test_dataset = RNNDataset(test_state_data, self.test_data['test_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
                 
                 
 #                self.train_dataset = RNNDataset(list(np.array(self.test_data['train_state'])[:, :, used_labels]), self.test_data['train_label'], self.args.batch_size, range_params=params)
@@ -221,10 +223,6 @@ class ExperimentHandler():
         if self.args.plot_acc:
             self.plot_acc()
         
-        # Plot single example if desired
-        if self.args.plot_example:
-            self.plot_example()
-           
         # Plot loss over time if desired
         if self.args.plot_loss:
             self.plot_loss()
@@ -246,8 +244,12 @@ class ExperimentHandler():
             self.validation()
     
         # Visualize all plots made
-        plt.show()
+#        plt.show()
 
+        # Plot single example if desired
+        if self.args.plot_example:
+            self.plot_example()
+           
         # Perform ablation on feature groups if desired
         if self.args.ablate:
             perform_ablation(self.test_data, self.args, self.validation_data)
@@ -345,22 +347,22 @@ class ExperimentHandler():
                 except RuntimeError:
                     flag = True
                     acc, TP, FP = policy.evaluate(threshold=thold, current=True)
-                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
+#                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
                 TPs.append(TP)
                 FPs.append(FP)
                 accs.append(acc)
-            print(f'policy {count} finished')
+#            print(f'policy {count} finished')
             plt.plot(FPs, TPs)
             legend.append(policy.identifier)
             count += 1
             print('best test accuracy is ', np.max(accs))
         baseline = [0, 1]
         legend.append('Random Baseline')
-        plt.plot(baseline, baseline, linestyle='--')
-        plt.legend(legend)
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('Test ROC')
+#        plt.plot(baseline, baseline, linestyle='--')
+#        plt.legend(legend)
+#        plt.xlabel('False Positive Rate')
+#        plt.ylabel('True Positive Rate')
+#        plt.title('Test ROC')
 
         self.figure_count += 1
 
@@ -420,22 +422,48 @@ class ExperimentHandler():
                 except RuntimeError:
                     flag = True
                     acc, TP, FP = policy.evaluate(threshold=thold, current=True)
-                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
+#                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
                 TPs.append(TP)
                 FPs.append(FP)
                 accs.append(acc)
-            print(f'policy {count} finished')
+#            print(f'policy {count} finished')
             plt.plot(FPs, TPs)
             legend.append(policy.identifier)
             count += 1
             print('best validation accuracy is ', np.max(accs))
+#        print('checking best validation model')
+#        for policy in self.classifiers:
+#            policy.model = deepcopy(policy.val_model)
+#            accs = []
+#            TPs = [1]
+#            FPs = [1]
+#            flag = True
+#            detail = 101
+#            policy.load_dataset(self.train_dataset, self.validation_dataset)
+#            for i in range(detail):
+#                thold = i/(detail-1)
+#                try:
+#                    acc, TP, FP = policy.evaluate(threshold=thold, current=flag)
+#                except RuntimeError:
+#                    flag = True
+#                    acc, TP, FP = policy.evaluate(threshold=thold, current=True)
+#                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
+#                TPs.append(TP)
+#                FPs.append(FP)
+#                accs.append(acc)
+#            print(f'policy {count} finished')
+#            plt.plot(FPs, TPs)
+#            legend.append(policy.identifier)
+#            count += 1
+#            print('best validation accuracy is ', np.max(accs))
+        
         baseline = [0, 1]
         legend.append('Random Baseline')
-        plt.plot(baseline, baseline, linestyle='--')
-        plt.legend(legend)
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('Validation ROC')
+#        plt.plot(baseline, baseline, linestyle='--')
+#        plt.legend(legend)
+#        plt.xlabel('False Positive Rate')
+#        plt.ylabel('True Positive Rate')
+#        plt.title('Validation ROC')
 
         self.figure_count += 1
 
@@ -449,7 +477,7 @@ class ExperimentHandler():
             plot_bounds = [self.classifiers[0].visualization_range[0], self.classifiers[0].visualization_range[1]]
             first_plot = True
             for policy in self.classifiers:
-                x, y, outputs = policy.evaluate_episode()
+                x, y, outputs, e_name = policy.evaluate_episode()
                 if first_plot:
 #                    plt.plot(range(len(x)), x,
 #                             linewidth=2, c='red')
@@ -479,6 +507,7 @@ class ExperimentHandler():
                 single_episode_flag = False
             count += 1
             self.figure_count += 1
+        return e_name, outputs, y
 
 if __name__ == "__main__":
     # Read in arguments from command line

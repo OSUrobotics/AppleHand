@@ -13,11 +13,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class RNNDataset(IterableDataset):
-    def __init__(self, state_list, label_list, batch_size, range_params=None):
+    def __init__(self, state_list, label_list, episode_names, batch_size, range_params=None):
         
         self.label_list = label_list
         self.batch_size = batch_size
-        
+        self.episode_names = episode_names
         try:
             if range_params == False:
                 print('WE ARENT NORMALIZING YOU DUMMY')
@@ -37,29 +37,30 @@ class RNNDataset(IterableDataset):
             self.shape=(0,0,0)
             self.state_list = state_list
 #        print(type(state_list))
-    def divide_into_batches(self, state, label):
+    def divide_into_batches(self, state, label, names):
         for i in range(0, len(state), self.batch_size):
-            yield state[i:i + self.batch_size], label[i:i + self.batch_size]
+            yield state[i:i + self.batch_size], label[i:i + self.batch_size], names[i:i + self.batch_size]
 
     @property
     def shuffled_episodes(self):
-        shuffled_state, shuffled_label = zip(*random.sample(list(zip(self.state_list, self.label_list)), len(self.state_list)))
-        batched_data = list(self.divide_into_batches(shuffled_state, shuffled_label))
+        shuffled_state, shuffled_label, shuffled_name = zip(*random.sample(list(zip(self.state_list, self.label_list, self.episode_names)), len(self.state_list)))
+        batched_data = list(self.divide_into_batches(shuffled_state, shuffled_label, shuffled_name))
         shuffled_state = [np.concatenate(arr_list[0]) for arr_list in batched_data]
         shuffled_label = [np.concatenate(arr_list[1]) for arr_list in batched_data]
+        names = [np.concatenate(arr_list[2]) for arr_list in batched_data]
         lens = []
         for arr_list in batched_data:
-#            print(len(arr_list[0]))
             temp = [len(arr_list[0][i]) for i in range(len(arr_list[0]))]
             lens.append(temp)
-#        input(lens)
-        return shuffled_state, shuffled_label, lens
+        return shuffled_state, shuffled_label, lens, names
 
     def get_episodes(self):
-        states, labels, lens = self.shuffled_episodes
+        states, labels, lens, names = self.shuffled_episodes
         state_iter = iter(states)
         label_iter = iter(labels)
-        return zip(state_iter, label_iter, lens)
+#        len_iter = iter(lens)
+#        name_iter = iter(names)
+        return zip(state_iter, label_iter, lens, names)
 
     def get_params(self):
         return self.range_params

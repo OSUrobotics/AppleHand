@@ -117,9 +117,11 @@ class AppleClassifier:
                                      self.layers, self.drop_prob)
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
+#            self.device = torch.device("cpu")
         else:
             self.device = torch.device("cpu")
         self.best_model = copy.deepcopy(self.model)
+        self.val_model = copy.deepcopy(self.model)
         self.plot_ind = 0
         self.test_size = test_dataset.shape
         self.train_size = train_dataset.shape
@@ -198,12 +200,16 @@ class AppleClassifier:
         self.losses.append(0)
         self.steps.append(0)
         net_loss = 0
+        val_acc = 0
         for epoch in range(1, self.epochs + 1):
             net_loss = 0
             epoch_loss = 0
             step = 0
             t0 = time.time()
-            for x, label, _ in self.train_data:
+            for x, label, lens, names in self.train_data:
+#                print('x',x)
+#                print('lens',lens)
+#                print('names',names)
                 hiddens = self.model.init_hidden(np.shape(x)[0])
                 x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
                 # label = torch.tensor(label)
@@ -212,6 +218,7 @@ class AppleClassifier:
                 else:
                     hiddens = tuple([e.data for e in hiddens])
                 pred, hiddens = self.model(x.to(self.device).float(), hiddens)
+                
                 for param in self.model.parameters():
                     if torch.isnan(param).any():
                         print('shit went sideways')
@@ -239,9 +246,14 @@ class AppleClassifier:
             t1=time.time()
             acc, TP, FP = self.evaluate(0.5)
             train_acc, train_tp, train_fp = self.evaluate(0.5,'train')
+#            print('labels',label[0:20])
+#            print('predictions',pred[0:20])
             if self.validation_data is not None:
                 validation_acc, validation_tp, validation_fp = self.evaluate(0.5,'validation')
                 self.validation_accuracies.append(validation_acc)
+                if validation_acc > val_acc:
+                    self.val_model = copy.deepcopy(self.model)
+                    val_acc = validation_acc
             if epoch%100 ==0:
                 print(f'epoch {epoch}: test accuracy  - {max(self.accuracies[epoch-100:epoch])}, loss - {sum(self.losses[epoch-100:epoch])}, TP rate - {max(self.TP_rate[epoch-100:epoch])}, FP rate - {min(self.FP_rate[epoch-100:epoch])}')
                 print(f'epoch {epoch}: train accuracy - {max(self.train_accuracies[epoch-100:epoch])}, train TP rate - {train_tp}, train FP rate - {train_fp}')
@@ -286,7 +298,7 @@ class AppleClassifier:
         elif test_set == 'validation':
             data = self.validation_data
             data_shape = self.validation_size
-        for x, y, lens in data:
+        for x, y, lens, _ in data:
             hidden_layer = model_to_test.init_hidden(np.shape(x)[0])
             # x = torch.tensor(x)
             # y = torch.tensor(y)
@@ -390,7 +402,8 @@ class AppleClassifier:
         last_ind = 1
         plot_data = list(self.test_data)[self.plot_ind]
         print(len(plot_data))
-        x, y = plot_data[0], plot_data[1]
+        x, y, name = plot_data[0], plot_data[1], plot_data[3]
+        print('we are printing test ', name)
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
         x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
         y = torch.reshape(y, (np.shape(y)[0], last_ind))
@@ -402,7 +415,7 @@ class AppleClassifier:
         normalized_feature = x[:, :, 3]
         normalized_feature = (normalized_feature - min(normalized_feature)) / (
                 max(normalized_feature) - min(normalized_feature))
-        return normalized_feature, y, outputs
+        return normalized_feature, y, outputs, name
 
     @staticmethod
     def moving_average(x, w):

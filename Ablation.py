@@ -55,10 +55,10 @@ def perform_ablation(database, args, validation=None):
     missing_names = ''
     worst_names = []
     sizes = [33]
-    full_train_loader = RNNDataset(database['train_state'], database['train_label'], args.batch_size)
-    full_test_loader = RNNDataset(database['test_state'], database['test_label'], args.batch_size)
+    full_train_loader = RNNDataset(database['train_state'], database['train_label'], database['pick_title'], args.batch_size)
+    full_test_loader = RNNDataset(database['test_state'], database['test_label'], database['pick_title'], args.batch_size)
     if validation is not None:
-        validation_loader = RNNDataset(validation['test_state'], validation['test_label'], args.batch_size)
+        validation_loader = RNNDataset(validation['test_state'], validation['test_label'], validation['pick_title'], args.batch_size)
     else:
         validation_loader = None
     performance = []
@@ -103,9 +103,9 @@ def perform_ablation(database, args, validation=None):
                 for tstep in range(len(validation['test_state'][episode])):
                     validation_dataloader[episode][tstep] = [validation_dataloader[episode][tstep][used_label] for used_label in used_labels]
 
-            reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], args.batch_size)
-            reduced_test_dataset = RNNDataset(test_state_data, database['test_label'], args.batch_size)
-            reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], args.batch_size)
+            reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], database['pick_title'], args.batch_size)
+            reduced_test_dataset = RNNDataset(test_state_data, database['test_label'], database['pick_title'], args.batch_size)
+            reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], validation['pick_title'], args.batch_size)
             
             args.input_dim = len(used_labels)
             print('using this many labels', len(used_labels))
