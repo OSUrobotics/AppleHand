@@ -18,6 +18,7 @@ import time
 from utils import unpack_arr
 import sklearn.metrics as metrics
 
+
 class AppleClassifier:
     def __init__(self, train_dataset, test_dataset, param_dict, model=None, validation_dataset=None):
         """
@@ -49,12 +50,6 @@ class AppleClassifier:
             self.drop_prob = param_dict['drop_prob']
         except KeyError:
             self.drop_prob = 0.2
-        #
-        # try:
-        #     self.batch_size = min(param_dict['batch_size'], len(test_dataset))
-        # except KeyError:
-        #     self.batch_size = min(5000, len(test_dataset))
-        #
         try:
             self.input_dim = param_dict['input_dim']
         except KeyError:
@@ -87,7 +82,7 @@ class AppleClassifier:
                                     batch_size=None)
         if validation_dataset is not None:
             self.validation_data = DataLoader(validation_dataset, shuffle=False,
-                                    batch_size=None)
+                                              batch_size=None)
             self.validation_size = validation_dataset.shape
             self.validation_accuracies = []
             print('validation size', self.validation_size)
@@ -103,8 +98,6 @@ class AppleClassifier:
         self.steps = []
         self.visualization_range = [0, 1000]
         # Instantiate the model
-#        print('starting model with input size = ',self.input_dim)
-#        print('hidden',self.hidden)
         if model is not None:
             self.model = []
             self.load_model(model)
@@ -117,7 +110,6 @@ class AppleClassifier:
                                      self.layers, self.drop_prob)
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
-#            self.device = torch.device("cpu")
         else:
             self.device = torch.device("cpu")
         self.best_model = copy.deepcopy(self.model)
@@ -125,18 +117,24 @@ class AppleClassifier:
         self.plot_ind = 0
         self.test_size = test_dataset.shape
         self.train_size = train_dataset.shape
-        print('test and train size', self.test_size, self.train_size)
+        print('test and train size ', self.test_size, self.train_size)
         self.identifier = self.outputs
         self.generate_ID()
         self.label_times = []
-        print('input size!!!!', self.input_dim)
-#        print('number of weights in model calculation', self.hidden*self.hidden*self.layers + self.input_dim*3)
-        print('number of weights in model', self.count_parameters())
+        print('input size: ', self.input_dim)
+        print('number of weights in model ', self.count_parameters())
 
-    def count_parameters(self): 
+    def count_parameters(self):
+        """
+        function to calculate number of trainable weights in model
+        """
         return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
     def load_dataset(self, train_data, test_data):
+        """
+        function to load train and test data
+        @params - must be RNNDatasets
+        """
         self.train_data = DataLoader(train_data, shuffle=False,
                                      batch_size=None)
         self.test_data = DataLoader(test_data, shuffle=False,
@@ -145,10 +143,16 @@ class AppleClassifier:
         self.train_size = train_data.shape
 
     def load_model(self, filepath):
+        """
+        function to load model
+        """
         self.model = torch.load('./models/' + filepath + '.pt')
         self.model.eval()
 
     def load_model_data(self, filepath):
+        """
+        function to load training performance, useful for continuing training with a particular model and having all data saved in same location
+        """
         file = open('./generated_data/' + filepath + '.pkl', 'rb')
         temp_dict = pkl.load(file)
         file.close()
@@ -164,27 +168,37 @@ class AppleClassifier:
             pass
 
     def get_data_dict(self):
+        """
+        function to generate dict of performance during training for saving
+        """
         classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
                            'steps': self.steps, 'TP': self.TP_rate,
                            'FP': self.FP_rate, 'ID': self.identifier,
                            'train_acc': self.train_accuracies, 'validation_acc': self.validation_accuracies}
         return classifier_dict.copy()
 
-    def get_best_performance(self,ind_range):
-        if (ind_range [0] >= 0) and (ind_range[1] < 0):
+    def get_best_performance(self, ind_range):
+        """
+        function to parse ROC response from scikit.metrics into max acc and best TP/FP over a window of epochs
+        @param ind_range - list containing start and end epoch to consider
+        """
+        if (ind_range[0] >= 0) and (ind_range[1] < 0):
             ind_range[1] = len(self.accuracies) + ind_range[1]
         max_acc_ind = [np.argmax(a) for a in self.accuracies[ind_range[0]:ind_range[1]]]
         max_acc_train = [max(a) for a in self.train_accuracies[ind_range[0]:ind_range[1]]]
         max_acc = []
         best_FP = []
         best_TP = []
-        for i in range(ind_range[1]-ind_range[0]):
+        for i in range(ind_range[1] - ind_range[0]):
             max_acc.append(self.accuracies[ind_range[0] + i][max_acc_ind[i]])
             best_FP.append(self.FP_rate[ind_range[0] + i][max_acc_ind[i]])
             best_TP.append(self.TP_rate[ind_range[0] + i][max_acc_ind[i]])
         return max_acc, best_TP, best_FP, max_acc_train
-        
+
     def generate_ID(self):
+        """
+        function to create unique identifier based on frequently changed metrics and save to self.identifier for saving data and models
+        """
         if self.epochs != 25:
             self.identifier = self.identifier + '_epochs=' + str(self.epochs)
         if self.hidden != 100:
@@ -197,17 +211,20 @@ class AppleClassifier:
             self.identifier = self.identifier + '_drop_probability=' + str(self.drop_prob)
 
     def train(self):
+        """
+        function to train model and save performance every epoch
+        """
+        # eval_period controls how frequently results are printed, NOT how frequently they get recorded
         eval_period = 10
-        # Define loss function and optimizer
         if torch.cuda.is_available():
             self.model.cuda()
         optim = torch.optim.Adam(self.model.parameters(), lr=0.001)
         self.model.train()
-#        print('starting training, finding the starting accuracy for random model of type', self.outputs)
+        print('starting training, finding the starting accuracy for random model of type', self.outputs)
         acc, TP, FP, AUC = self.evaluate(0.5)
         train_acc, _, _, _ = self.evaluate(0.5, 'train')
         best_ind = np.argmax(acc)
-#        print(f'starting: accuracy - {acc[best_ind]}, TP rate - {TP[best_ind]}, FP rate - {FP[best_ind]}')
+        print(f'starting: accuracy - {acc[best_ind]}, TP rate - {TP[best_ind]}, FP rate - {FP[best_ind]}')
         self.accuracies.append(acc)
         self.train_accuracies.append(train_acc)
         self.TP_rate.append(TP)
@@ -223,7 +240,6 @@ class AppleClassifier:
             step = 0
             t0 = time.time()
             for x, label, lens, names in self.train_data:
-
                 hiddens = self.model.init_hidden(np.shape(x)[0])
                 x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
                 if self.model_type == "GRU":
@@ -231,7 +247,6 @@ class AppleClassifier:
                 else:
                     hiddens = tuple([e.data for e in hiddens])
                 pred, hiddens = self.model(x.to(self.device).float(), hiddens)
-                
                 for param in self.model.parameters():
                     if torch.isnan(param).any():
                         print('shit went sideways')
@@ -249,28 +264,29 @@ class AppleClassifier:
                 net_loss += float(loss)
                 epoch_loss += float(loss)
                 step += 1
-            t1=time.time()
+            t1 = time.time()
             acc, TP, FP, AUC = self.evaluate(0.5)
-            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5,'train')
-
+            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
             if self.validation_data is not None:
-                validation_acc, validation_tp, validation_fp, validation_AUC = self.evaluate(0.5,'validation')
+                validation_acc, validation_tp, validation_fp, validation_AUC = self.evaluate(0.5, 'validation')
                 self.validation_accuracies.append(validation_acc)
                 if validation_AUC > val_AUC:
                     self.val_model = copy.deepcopy(self.model)
                     val_AUC = validation_AUC
             if epoch % eval_period == 0:
-                max_acc, best_TP, best_FP, max_acc_train = self.get_best_performance([epoch-eval_period,epoch])
+                max_acc, best_TP, best_FP, max_acc_train = self.get_best_performance([epoch - eval_period, epoch])
                 best_epoch = np.argmax(max_acc)
-                print(f'epoch {epoch}: test accuracy  - {max_acc[best_epoch]}, loss - {sum(self.losses[epoch-eval_period:epoch])}, TP rate - {best_TP[best_epoch]}, FP rate - {best_FP[best_epoch]}')
+                print(
+                    f'epoch {epoch}: test accuracy  - {max_acc[best_epoch]}, loss - {sum(self.losses[epoch - eval_period:epoch])}, TP rate - {best_TP[best_epoch]}, FP rate - {best_FP[best_epoch]}')
                 print(f'epoch {epoch}: train accuracy - {max(max_acc_train)}')
                 if self.validation_data is not None:
-                    print(f'epoch {epoch}: validation accuracy - {max([max(temp) for temp in self.validation_accuracies[epoch-eval_period:epoch]])}')
+                    print(
+                        f'epoch {epoch}: validation accuracy - {max([max(temp) for temp in self.validation_accuracies[epoch - eval_period:epoch]])}')
             if AUC > backup_AUC:
                 self.best_model = copy.deepcopy(self.model)
                 backup_AUC = AUC
             t2 = time.time()
-#            print('times', t1-t0, t2-t1)
+            #print('times', t1-t0, t2-t1)
             self.accuracies.append(acc)
             self.losses.append(net_loss)
             self.steps.append(epoch)
@@ -282,9 +298,15 @@ class AppleClassifier:
         self.model = copy.deepcopy(self.best_model)
 
     def evaluate(self, threshold=0.5, test_set='test', current=True):
+        """
+        function to evaluate model performance
+        @param threshold - determines threshold for classifying a pick as a success or failure
+        @param test_set - determines if we check on training, testing or validation set
+        @param current - Bool, determines if we use current model or best saved model
+        """
         outputs = np.array([])
         test_labels = np.array([])
-        
+
         if current:
             model_to_test = self.model
         else:
@@ -305,6 +327,8 @@ class AppleClassifier:
         elif test_set == 'validation':
             data = self.validation_data
             data_shape = self.validation_size
+
+        # loads outputs and test labels into lists for evaluation
         for x, y, lens, _ in data:
             hidden_layer = model_to_test.init_hidden(np.shape(x)[0])
             final_indexes.extend(lens)
@@ -316,73 +340,81 @@ class AppleClassifier:
             count += 1
             outputs = np.append(outputs, out.to('cpu').detach().numpy())
             test_labels = np.append(test_labels, y.to('cpu').detach().numpy())
+
         if self.eval_type == 'last':
-            final_indexes = [sum(final_indexes[:i])-1 for i in range(1,len(final_indexes)+1)]
+            # Evaluates only the last point in the sequence
+            final_indexes = [sum(final_indexes[:i]) - 1 for i in range(1, len(final_indexes) + 1)]
             # this only works since all examples are the same length
             last_ind_output = outputs[final_indexes]
             last_ind_label = test_labels[final_indexes]
             num_pos = np.count_nonzero(last_ind_label)
             num_total = len(last_ind_label)
-            FP, TP, thresholds = metrics.roc_curve(last_ind_label,last_ind_output)
+            FP, TP, thresholds = metrics.roc_curve(last_ind_label, last_ind_output)
             acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
-            AUC = metrics.roc_auc_score(last_ind_label,last_ind_output)
+            AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
         elif self.eval_type == 'alt_last':
+            # Evaluates only the last point in the sequence with 3 classifications, success, failure and undecided
             # this only works since all examples are the same length
-            final_indexes = list(range(data_shape[1]-1, len(outputs), data_shape[1]))
-#            input(final_indexes)
+            final_indexes = list(range(data_shape[1] - 1, len(outputs), data_shape[1]))
             last_ind_output = outputs[final_indexes]
             last_ind_label = test_labels[final_indexes]
             confident_area = ((last_ind_output >= 0.75) | (last_ind_output <= 0.25))
-            temp = np.array(last_ind_label[confident_area]) - (np.array(last_ind_output[confident_area])>0.5) 
+            temp = np.array(last_ind_label[confident_area]) - (np.array(last_ind_output[confident_area]) > 0.5)
             acc = 1 - np.count_nonzero(temp) / len(final_indexes)
             FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
-            AUC = metrics.roc_auc_score(last_ind_label,last_ind_output)
+            AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
         elif self.eval_type == 'pick':
-            final_indexes = [sum(final_indexes[:i])-1 for i in range(1,len(final_indexes)+1)]
+            # If 5 points in a row are the same classification, classify the pick as that, otherwise keep going
+            final_indexes = [sum(final_indexes[:i]) - 1 for i in range(1, len(final_indexes) + 1)]
             # again, this will be nasty
-            label_data = {'classification':[], 'timestep':[]}
-            for i in range(len(final_indexes)-1):
-                for j in range(final_indexes[i],final_indexes[i+1]-5):
-                    timestep = final_indexes[i+1] - final_indexes[i]
+            label_data = {'classification': [], 'timestep': []}
+            for i in range(len(final_indexes) - 1):
+                for j in range(final_indexes[i], final_indexes[i + 1] - 5):
+                    timestep = final_indexes[i + 1] - final_indexes[i]
                     classification = True
-                    if all(outputs[j:j+5] < threshold):
+                    if all(outputs[j:j + 5] < threshold):
                         classification = False
-                        timestep = j+5 - final_indexes[i]
+                        timestep = j + 5 - final_indexes[i]
                         break
                 label_data['classification'].append(classification)
-                label_data['timestep'].append(timestep)             
+                label_data['timestep'].append(timestep)
             last_ind_label = test_labels[final_indexes[1:]]
             temp = np.array(last_ind_label) - np.array(label_data['classification'])
             acc = 1 - np.count_nonzero(temp) / len(last_ind_label)
             FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
-            AUC = metrics.roc_auc_score(last_ind_label,last_ind_output)
+            AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
             self.label_times.append(label_data)
         else:
-            output_data = outputs
-            output_data = output_data > threshold
-            output_data = output_data.astype(int)
+            # Check every datapoint in the sequence
             num_pos = np.count_nonzero(outputs)
             num_total = len(outputs)
             FP, TP, thresholds = metrics.roc_curve(test_labels, outputs)
             acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
             AUC = metrics.roc_auc_score(test_labels, outputs)
         model_to_test.train()
-        
+
         return acc, TP, FP, AUC
 
     def evaluate_episode(self):
+        """
+        function to evaluate a single episode and return results for visualization
+        @return normalized_feature - Z force for full sequence normalized to 0-1
+        @return y - correct output
+        @return outputs - model output
+        @return name - name of pick being evaluated
+        """
         self.model.eval()
         last_ind = 1
         plot_data = list(self.test_data)[self.plot_ind]
-#        print(len(plot_data))
+        #        print(len(plot_data))
         x, y, name = plot_data[0], plot_data[1], plot_data[3]
-#        print('we are printing test ', name)
+        #        print('we are printing test ', name)
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
         x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
         y = torch.reshape(y, (np.shape(y)[0], last_ind))
-        if self.model_type=='LSTM':
+        if self.model_type == 'LSTM':
             hidden_layer = tuple([e.data for e in hidden_layer])
         out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
         outputs = out.to('cpu').detach().numpy()
@@ -392,17 +424,19 @@ class AppleClassifier:
                 max(normalized_feature) - min(normalized_feature))
         return normalized_feature, y, outputs, name
 
-    @staticmethod
-    def moving_average(x, w):
-        return np.convolve(x, np.ones(w), 'valid') / w
-
     def save_model(self, filename=None):
+        """
+        function to save model in models folder
+        """
         if filename is None:
             filename = './models/' + self.identifier + \
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
         torch.save(self.best_model, filename + '.pt')
 
     def save_data(self, filename=None):
+        """
+        function to save performance data in generated_data folder
+        """
         if filename is None:
             filename = './generated_data/' + self.identifier + \
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")

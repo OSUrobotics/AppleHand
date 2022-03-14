@@ -10,36 +10,35 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import pickle as pkl
-#from raw_csv_process import process_data
-#from simple_csv_process import simple_process_data, process_data_iterable
+# from raw_csv_process import process_data
+# from simple_csv_process import simple_process_data, process_data_iterable
 from new_csv_process import GraspProcessor
 import argparse
 from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
 from utils import RNNDataset
-#from itertools import islice
+# from itertools import islice
 import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import metrics
 import datetime
 from copy import deepcopy
 
-class ExperimentHandler():
+
+class ExperimentHandler:
     def __init__(self):
-        self.args = []
         self.setup_args()
         self.data_processor = GraspProcessor()
         self.test_dataset = []
         self.validation_dataset = []
         self.labels = {'Arm Force': [0, 1, 2],
-                      'Arm Torque': [3, 4, 5],
-                      'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
-                      'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
-                      'Finger Position': [12, 21, 30],
-                      'Finger Speed': [13, 22, 31],
-                      'Finger Effort': [14, 23, 32]}
+                       'Arm Torque': [3, 4, 5],
+                       'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
+                       'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
+                       'Finger Position': [12, 21, 30],
+                       'Finger Speed': [13, 22, 31],
+                       'Finger Effort': [14, 23, 32]}
         if self.args.data_path is not None:
-            print('in data path part')
             if self.args.pick:
                 self.data_processor.process_full_test(self.args.data_path)
             else:
@@ -51,17 +50,14 @@ class ExperimentHandler():
                 self.data_processor.process_data_iterable(self.args.validation_path, validate=True)
 
         if self.args.pick:
+            print('opening apple grasp and pick datset')
             file = open('combined_train_test_dataset.pkl', 'rb')
             self.test_data = pkl.load(file)
-            print(np.shape(self.test_data['train_state']))
             self.test_data = self.make_float(self.test_data)
-            print(np.shape(self.test_data['train_state']))
-            print(len(self.test_data['train_state'][0]))
             file.close()
             if self.args.validate:
                 file = open('combined_validation_dataset.pkl', 'rb')
                 self.validation_data = pkl.load(file)
-#                print(self.validation_data)
                 self.validation_data = self.make_float(self.validation_data)
                 file.close()
         else:
@@ -97,34 +93,35 @@ class ExperimentHandler():
         for key in indict.keys():
             try:
                 indict[key] = indict[key].astype(float)
-            except AttributeError: 
+            except AttributeError:
                 pass
         return indict
-
-#    def split_database(self):
-#        # purpose of this is to build a training/testing set based on the real world examples
 
     def build_dataset(self, validate=False):
         params = None
         if validate:
-            print('validation')
             params = np.load('proxy_mins_and_maxs.npy', allow_pickle=True)
             params = params.item()
             if self.args.used_features is None:
-                self.validation_dataset = RNNDataset(self.validation_data['test_state'], self.validation_data['test_label'], self.validation_data['pick_title'], self.args.batch_size, range_params=params)
+                self.validation_dataset = RNNDataset(self.validation_data['test_state'],
+                                                     self.validation_data['test_label'],
+                                                     self.validation_data['pick_title'], self.args.batch_size,
+                                                     range_params=params)
             else:
                 used_labels = []
                 for label in self.args.used_features:
                     used_labels.extend(self.labels[label])
-                self.validation_dataset = RNNDataset(list(np.array(self.validation_data['test_state'])[:, :, used_labels]), self.validation_data['test_label'], self.validation_data['pick_title'], self.args.batch_size, range_params=params)
+                self.validation_dataset = RNNDataset(
+                    list(np.array(self.validation_data['test_state'])[:, :, used_labels]),
+                    self.validation_data['test_label'], self.validation_data['pick_title'], self.args.batch_size,
+                    range_params=params)
         else:
-            print('train then test')
-            print(np.shape(self.test_data['train_state']))
-            print(len(self.test_data['train_state'][0]))
-            if self.args.used_features is None:    
-                self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
+            if self.args.used_features is None:
+                self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'],
+                                                self.test_data['pick_title'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
-                self.test_dataset = RNNDataset(self.test_data['test_state'], self.test_data['test_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
+                self.test_dataset = RNNDataset(self.test_data['test_state'], self.test_data['test_label'],
+                                               self.test_data['pick_title'], self.args.batch_size, range_params=params)
                 np.save('proxy_mins_and_maxs', params)
             else:
                 used_labels = []
@@ -134,19 +131,18 @@ class ExperimentHandler():
                 test_state_data = deepcopy(self.test_data['test_state'])
                 for episode in range(len(self.test_data['train_state'])):
                     for tstep in range(len(self.test_data['train_state'][episode])):
-                        train_state_data[episode][tstep]= [train_state_data[episode][tstep][used_label] for used_label in used_labels]
+                        train_state_data[episode][tstep] = [train_state_data[episode][tstep][used_label] for used_label
+                                                            in used_labels]
                 for episode in range(len(self.test_data['test_state'])):
                     for tstep in range(len(self.test_data['test_state'][episode])):
-                        test_state_data[episode][tstep]= [test_state_data[episode][tstep][used_label] for used_label in used_labels]
-                self.train_dataset = RNNDataset(train_state_data, self.test_data['train_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
+                        test_state_data[episode][tstep] = [test_state_data[episode][tstep][used_label] for used_label in
+                                                           used_labels]
+                self.train_dataset = RNNDataset(train_state_data, self.test_data['train_label'],
+                                                self.test_data['pick_title'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
-                self.test_dataset = RNNDataset(test_state_data, self.test_data['test_label'], self.test_data['pick_title'], self.args.batch_size, range_params=params)
-                
-                
-#                self.train_dataset = RNNDataset(list(np.array(self.test_data['train_state'])[:, :, used_labels]), self.test_data['train_label'], self.args.batch_size, range_params=params)
-#                params = self.train_dataset.get_params()
-#                self.test_dataset = RNNDataset(list(np.array(self.test_data['test_state'])[:, :, used_labels]), self.test_data['test_label'], self.args.batch_size, range_params=params)
-            np.save('proxy_mins_and_maxs',params)
+                self.test_dataset = RNNDataset(test_state_data, self.test_data['test_label'],
+                                               self.test_data['pick_title'], self.args.batch_size, range_params=params)
+            np.save('proxy_mins_and_maxs', params)
 
     def setup_args(self, args=None):
         """ Set important variables based on command line arguments OR passed on argument values
@@ -171,19 +167,19 @@ class ExperimentHandler():
         parser.add_argument("--plot_loss", default=False,
                             type=bool)  # flag to determine if we want to plot the loss over epochs
         parser.add_argument("--plot_ROC", default=False, type=bool)  # flag to determine if we want to plot an ROC
-        parser.add_argument("--check_RF", default=False, type=bool)  # flag to determine if we want to compare LSTM to RF on an ROC curve
+        parser.add_argument("--check_RF", default=False,
+                            type=bool)  # flag to determine if we want to compare LSTM to RF on an ROC curve
         parser.add_argument("--plot_TP_FP", default=False,
                             type=bool)  # flag to determine if we want to plot the TP and FP over epochs
         parser.add_argument("--plot_example", default=False,
-                            type=bool)  # flag to determine if we want to plot an episode and the networks perfromance
+                            type=bool)  # flag to determine if we want to plot an episode and the networks performance
         parser.add_argument("--goal", default="grasp", type=str)  # desired output of the lstm
-#        parser.add_argument("--reprocess", default=False, type=bool)  # bool to manually reprocess data if changed
         parser.add_argument("--compare_policy", default=False,
                             type=bool)  # bool to train new policy and compare to old policy in all plots
         parser.add_argument("--batch_size", default=1, type=int)  # number of episodes in a batch during training
         parser.add_argument("--used_features", default=None, type=str)
         parser.add_argument("--validate", default=False, type=bool)
-        parser.add_argument("--pick", default=False,type=bool)
+        parser.add_argument("--pick", default=False, type=bool)
         parser.add_argument("--validation_path", default=None, type=str)
 
         args = parser.parse_args()
@@ -197,7 +193,8 @@ class ExperimentHandler():
 
         if self.args.policy is None or self.args.compare_policy:
             try:
-                classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args), validation_dataset=self.validation_dataset)
+                classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args),
+                                             validation_dataset=self.validation_dataset)
             except AttributeError:
                 classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
             classifier.train()
@@ -210,7 +207,7 @@ class ExperimentHandler():
             classifier.load_model_data(self.args.policy)
         self.classifiers.append(classifier)
         self.data_dict.append(classifier.get_data_dict())
-        
+
         if self.args.compare_policy:
             old_classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
             old_classifier.load_model(self.args.policy)
@@ -218,43 +215,41 @@ class ExperimentHandler():
             self.classifiers.append(old_classifier)
             self.data_dict.append(old_classifier.get_data_dict())
         self.figure_count = 1
-        
+
         # Plot accuracy over time if desired
         if self.args.plot_acc:
             self.plot_acc()
-        
+
         # Plot loss over time if desired
         if self.args.plot_loss:
             self.plot_loss()
-            
+
         # Plot TP and FP rate over time if desired
         if self.args.plot_TP_FP:
             self.plot_TP_FP()
-    
+
         # Train a random forset on the last datapoint in the series if desired
         if self.args.check_RF:
             self.train_RF()
-            
+
         # Plot an ROC if desired
         if self.args.plot_ROC:
             self.plot_ROC()
-            
+
         # Find validation ROC if desired
         if self.args.validate:
             self.validation()
-    
+
         # Visualize all plots made
         plt.show()
 
         # Plot single example if desired
         if self.args.plot_example:
             self.plot_example()
-           
+
         # Perform ablation on feature groups if desired
         if self.args.ablate:
-#            perform_ablation(self.test_data, self.args, self.validation_data)
             perform_ablation(self.test_data, self.args, None)
-
 
     def plot_acc(self):
         print('Plotting classifier accuracy over time')
@@ -289,14 +284,13 @@ class ExperimentHandler():
         plt.title('Loss Curve')
         self.figure_count += 1
 
-
     def plot_TP_FP(self):
         legend = []
         print('Plotting true positive and false positive rate over time')
         TPFP_plot = plt.figure(self.figure_count)
         for policy in self.classifiers:
-            _, best_TP, best_FP, _ = policy.get_best_performance([0,-1])
-#            print(best_TP,best_FP)
+            _, best_TP, best_FP, _ = policy.get_best_performance([0, -1])
+            #            print(best_TP,best_FP)
             ID = policy.identifier
             plt.plot(range(len(best_TP)), best_TP)
             plt.plot(range(len(best_FP)), best_FP)
@@ -307,7 +301,7 @@ class ExperimentHandler():
         plt.ylabel('True and False Positive Rate')
         plt.title('True and False Positive Rate')
         self.figure_count += 1
-    
+
     def plot_ROC(self):
         legend = []
         count = 0
@@ -332,10 +326,10 @@ class ExperimentHandler():
             pass
         ROC_plot = plt.figure(self.figure_count)
         for policy in self.classifiers:
-            max_acc, best_TP, best_FP, _ = policy.get_best_performance([0,-1])
+            max_acc, best_TP, best_FP, _ = policy.get_best_performance([0, -1])
             print('best test accuracy is ', max(max_acc))
             best_epoch = np.argmax(max_acc)
-            plt.plot(policy.FP_rate[best_epoch],policy.TP_rate[best_epoch])
+            plt.plot(policy.FP_rate[best_epoch], policy.TP_rate[best_epoch])
             legend.append(policy.identifier)
             count += 1
 
@@ -364,9 +358,9 @@ class ExperimentHandler():
         RF.fit(RF_train_data, train_label)
         test_results = RF.predict(test_data)
         print("RF classifier accuracy:", metrics.accuracy_score(test_label, test_results))
-        np.save('RF_classifier_acc' + datetime.datetime.now().strftime("%m_%d_%y_%H%M"), np.array(metrics.accuracy_score(test_label, test_results)))
-    
-    
+        np.save('./models/RF_models/RF_classifier_' + datetime.datetime.now().strftime("%m_%d_%y_%H%M"),
+                np.array(metrics.accuracy_score(test_label, test_results)))
+
     def validation(self):
         legend = []
         print('Plotting an ROC curve')
@@ -398,7 +392,7 @@ class ExperimentHandler():
                 acc, TP, FP, AUC = policy.evaluate(threshold=0.5, current=flag, test_set='validation')
             except RuntimeError:
                 acc, TP, FP, ACU = policy.evaluate(threshold=0.5, current=True, test_set='validation')
-            plt.plot(FP,TP)
+            plt.plot(FP, TP)
             legend.append(policy.identifier)
             count += 1
             best_thold = np.argmax(acc)
@@ -414,7 +408,7 @@ class ExperimentHandler():
         self.figure_count += 1
 
     def plot_example(self):
-        
+
         legend = ['Correct Output']
         print('Plotting single episode')
         count = 0
@@ -427,8 +421,6 @@ class ExperimentHandler():
             for policy in self.classifiers:
                 x, y, outputs, e_name = policy.evaluate_episode()
                 if first_plot:
-#                    plt.plot(range(len(x)), x,
-#                             linewidth=2, c='red')
                     plt.scatter(
                         range(len(y)), y,
                         c='green')
@@ -446,23 +438,22 @@ class ExperimentHandler():
                         rounded_outputs.append(0.5)
                 plt.scatter(range(len(outputs)), outputs, marker="+")
                 plt.scatter(range(len(rounded_outputs)), rounded_outputs, marker="x")
-            
+
             plt.legend(legend)
-            
+
             plt.ylim(-0.05, 1.1)
-            print('just did e_name',e_name[0][0], ' last thing was ', y[-1][0] ) 
+            print('just did e_name', e_name[0][0], ' last thing was ', y[-1][0])
             plt.show()
             self.figure_count += 1
-            
+
             flag_choice = input('generate another plot? y/n')
             if flag_choice.lower() == 'n':
                 single_episode_flag = False
             count += 1
         return e_name, outputs, y
 
+
 if __name__ == "__main__":
     # Read in arguments from command line
     experiments = ExperimentHandler()
-#    self.args = setup_args()
     experiments.run_experiment()
-    
