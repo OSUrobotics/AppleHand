@@ -16,7 +16,7 @@ import pickle as pkl
 import datetime
 import time
 from utils import unpack_arr
-
+import sklearn.metrics as metrics
 
 class AppleClassifier:
     def __init__(self, train_dataset, test_dataset, param_dict, model=None, validation_dataset=None):
@@ -170,6 +170,20 @@ class AppleClassifier:
                            'train_acc': self.train_accuracies, 'validation_acc': self.validation_accuracies}
         return classifier_dict.copy()
 
+    def get_best_performance(self,ind_range):
+        if (ind_range [0] >= 0) and (ind_range[1] < 0):
+            ind_range[1] = len(self.accuracies) + ind_range[1]
+        max_acc_ind = [np.argmax(a) for a in self.accuracies[ind_range[0]:ind_range[1]]]
+        max_acc_train = [max(a) for a in self.train_accuracies[ind_range[0]:ind_range[1]]]
+        max_acc = []
+        best_FP = []
+        best_TP = []
+        for i in range(ind_range[1]-ind_range[0]):
+            max_acc.append(self.accuracies[ind_range[0] + i][max_acc_ind[i]])
+            best_FP.append(self.FP_rate[ind_range[0] + i][max_acc_ind[i]])
+            best_TP.append(self.TP_rate[ind_range[0] + i][max_acc_ind[i]])
+        return max_acc, best_TP, best_FP, max_acc_train
+        
     def generate_ID(self):
         if self.epochs != 25:
             self.identifier = self.identifier + '_epochs=' + str(self.epochs)
@@ -183,36 +197,35 @@ class AppleClassifier:
             self.identifier = self.identifier + '_drop_probability=' + str(self.drop_prob)
 
     def train(self):
-        backup_acc = 0
+        eval_period = 10
         # Define loss function and optimizer
         if torch.cuda.is_available():
             self.model.cuda()
         optim = torch.optim.Adam(self.model.parameters(), lr=0.001)
         self.model.train()
-        print('starting training, finding the starting accuracy for random model of type', self.outputs)
-        acc, TP, FP = self.evaluate(0.5)
-        train_acc, _, _ = self.evaluate(0.5, 'train')
-        print(f'starting: accuracy - {acc}, TP rate - {TP}, FP rate - {FP}')
+#        print('starting training, finding the starting accuracy for random model of type', self.outputs)
+        acc, TP, FP, AUC = self.evaluate(0.5)
+        train_acc, _, _, _ = self.evaluate(0.5, 'train')
+        best_ind = np.argmax(acc)
+#        print(f'starting: accuracy - {acc[best_ind]}, TP rate - {TP[best_ind]}, FP rate - {FP[best_ind]}')
         self.accuracies.append(acc)
         self.train_accuracies.append(train_acc)
         self.TP_rate.append(TP)
         self.FP_rate.append(FP)
         self.losses.append(0)
         self.steps.append(0)
+        backup_AUC = AUC
         net_loss = 0
-        val_acc = 0
+        val_AUC = 0
         for epoch in range(1, self.epochs + 1):
             net_loss = 0
             epoch_loss = 0
             step = 0
             t0 = time.time()
             for x, label, lens, names in self.train_data:
-#                print('x',x)
-#                print('lens',lens)
-#                print('names',names)
+
                 hiddens = self.model.init_hidden(np.shape(x)[0])
                 x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
-                # label = torch.tensor(label)
                 if self.model_type == "GRU":
                     hiddens = hiddens.data
                 else:
@@ -226,13 +239,6 @@ class AppleClassifier:
                     pred = torch.reshape(pred, (np.shape(x)[0],))
                     if self.eval_type == 'last':
                         loss = self.loss_fn(pred, label.to(self.device).float())
-#                        print('evaluating last')
-#                        print(pred[-10:])
-#                        print('vs')
-#                        print(pred[-10:], label[-10:])
-                        #idea here is if the only thing we care about is the last point for evaluation purposes, we should only count the last few classifications when calculating loss
-#                        loss = self.loss_fn(pred[-10:], label[-10:].to(self.device).float())
-#                        print(loss)
                     else:
                         loss = self.loss_fn(pred, label.to(self.device).float())
                 else:
@@ -244,24 +250,25 @@ class AppleClassifier:
                 epoch_loss += float(loss)
                 step += 1
             t1=time.time()
-            acc, TP, FP = self.evaluate(0.5)
-            train_acc, train_tp, train_fp = self.evaluate(0.5,'train')
-#            print('labels',label[0:20])
-#            print('predictions',pred[0:20])
+            acc, TP, FP, AUC = self.evaluate(0.5)
+            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5,'train')
+
             if self.validation_data is not None:
-                validation_acc, validation_tp, validation_fp = self.evaluate(0.5,'validation')
+                validation_acc, validation_tp, validation_fp, validation_AUC = self.evaluate(0.5,'validation')
                 self.validation_accuracies.append(validation_acc)
-                if validation_acc > val_acc:
+                if validation_AUC > val_AUC:
                     self.val_model = copy.deepcopy(self.model)
-                    val_acc = validation_acc
-            if epoch%100 ==0:
-                print(f'epoch {epoch}: test accuracy  - {max(self.accuracies[epoch-100:epoch])}, loss - {sum(self.losses[epoch-100:epoch])}, TP rate - {max(self.TP_rate[epoch-100:epoch])}, FP rate - {min(self.FP_rate[epoch-100:epoch])}')
-                print(f'epoch {epoch}: train accuracy - {max(self.train_accuracies[epoch-100:epoch])}, train TP rate - {train_tp}, train FP rate - {train_fp}')
+                    val_AUC = validation_AUC
+            if epoch % eval_period == 0:
+                max_acc, best_TP, best_FP, max_acc_train = self.get_best_performance([epoch-eval_period,epoch])
+                best_epoch = np.argmax(max_acc)
+                print(f'epoch {epoch}: test accuracy  - {max_acc[best_epoch]}, loss - {sum(self.losses[epoch-eval_period:epoch])}, TP rate - {best_TP[best_epoch]}, FP rate - {best_FP[best_epoch]}')
+                print(f'epoch {epoch}: train accuracy - {max(max_acc_train)}')
                 if self.validation_data is not None:
-                    print(f'epoch {epoch}: validation accuracy - {max(self.validation_accuracies[epoch-100:epoch])}, val TP rate - {validation_tp}, val FP rate - {validation_fp}')
-            if acc > backup_acc:
+                    print(f'epoch {epoch}: validation accuracy - {max([max(temp) for temp in self.validation_accuracies[epoch-eval_period:epoch]])}')
+            if AUC > backup_AUC:
                 self.best_model = copy.deepcopy(self.model)
-                backup_acc = acc
+                backup_AUC = AUC
             t2 = time.time()
 #            print('times', t1-t0, t2-t1)
             self.accuracies.append(acc)
@@ -271,7 +278,7 @@ class AppleClassifier:
             self.FP_rate.append(FP)
             self.train_accuracies.append(train_acc)
             net_loss = 0
-        print(f'Finished training, best recorded model had acc = {backup_acc}')
+        print(f'Finished training, best recorded model had AUC = {backup_AUC}')
         self.model = copy.deepcopy(self.best_model)
 
     def evaluate(self, threshold=0.5, test_set='test', current=True):
@@ -300,60 +307,39 @@ class AppleClassifier:
             data_shape = self.validation_size
         for x, y, lens, _ in data:
             hidden_layer = model_to_test.init_hidden(np.shape(x)[0])
-            # x = torch.tensor(x)
-            # y = torch.tensor(y)
-            
-#            input(lens)
             final_indexes.extend(lens)
             x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
             y = torch.reshape(y, (np.shape(y)[0], last_ind))
             if self.model_type == 'LSTM':
                 hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = model_to_test(x.to(self.device).float(), hidden_layer)
-#            print(np.shape(out))
             count += 1
             outputs = np.append(outputs, out.to('cpu').detach().numpy())
             test_labels = np.append(test_labels, y.to('cpu').detach().numpy())
         if self.eval_type == 'last':
-#            input(final_indexes)
             final_indexes = [sum(final_indexes[:i])-1 for i in range(1,len(final_indexes)+1)]
-#            input(final_indexes)
-            
             # this only works since all examples are the same length
-#            final_indexes = list(range(data_shape[1]-1, len(outputs), data_shape[1]))
-#            input(final_indexes)
             last_ind_output = outputs[final_indexes]
             last_ind_label = test_labels[final_indexes]
-#            print(last_ind_label)
-#            last_ind_output.append(out.to('cpu').detach().numpy()[-1][0])
-#            last_ind_label.append(y.to('cpu').detach().numpy()[-1][0])
-            temp = np.array(last_ind_label) - (np.array(last_ind_output)>threshold) 
-#            print('num final indexes',len(final_indexes))
-#            print('nonzero final inds', np.count_nonzero(last_ind_label), ' final inds ' , len(last_ind_label))
-            acc = 1 - np.count_nonzero(temp) / len(final_indexes)
-            FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
-            TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
+            num_pos = np.count_nonzero(last_ind_label)
+            num_total = len(last_ind_label)
+            FP, TP, thresholds = metrics.roc_curve(last_ind_label,last_ind_output)
+            acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
+            AUC = metrics.roc_auc_score(last_ind_label,last_ind_output)
         elif self.eval_type == 'alt_last':
             # this only works since all examples are the same length
-#            print(data_shape[1])
             final_indexes = list(range(data_shape[1]-1, len(outputs), data_shape[1]))
 #            input(final_indexes)
             last_ind_output = outputs[final_indexes]
             last_ind_label = test_labels[final_indexes]
-#            last_ind_output.append(out.to('cpu').detach().numpy()[-1][0])
-#            last_ind_label.append(y.to('cpu').detach().numpy()[-1][0])
             confident_area = ((last_ind_output >= 0.75) | (last_ind_output <= 0.25))
-#            print(confident_area)
-            temp = np.array(last_ind_label[confident_area]) - (np.array(last_ind_output[confident_area])>threshold) 
-#            print(last_ind_output[confident_area])
-#            print(last_ind_label[confident_area])
-#            print(temp)
+            temp = np.array(last_ind_label[confident_area]) - (np.array(last_ind_output[confident_area])>0.5) 
             acc = 1 - np.count_nonzero(temp) / len(final_indexes)
             FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
+            AUC = metrics.roc_auc_score(last_ind_label,last_ind_output)
         elif self.eval_type == 'pick':
             final_indexes = [sum(final_indexes[:i])-1 for i in range(1,len(final_indexes)+1)]
-#            print(test_set, data_shape)
             # again, this will be nasty
             label_data = {'classification':[], 'timestep':[]}
             for i in range(len(final_indexes)-1):
@@ -363,14 +349,7 @@ class AppleClassifier:
                     if all(outputs[j:j+5] < threshold):
                         classification = False
                         timestep = j+5 - final_indexes[i]
-#                        print('confidently classified as failure')
                         break
-                    # can remove this if we just want to predict failure
-#                    elif all(outputs[j:j+5] > 0.75):
-#                        classification = True
-#                        timestep = j+5 - final_indexes[i]
-#                        print('confidently classified as success')
-#                        break
                 label_data['classification'].append(classification)
                 label_data['timestep'].append(timestep)             
             last_ind_label = test_labels[final_indexes[1:]]
@@ -378,32 +357,28 @@ class AppleClassifier:
             acc = 1 - np.count_nonzero(temp) / len(last_ind_label)
             FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
+            AUC = metrics.roc_auc_score(last_ind_label,last_ind_output)
             self.label_times.append(label_data)
         else:
             output_data = outputs
             output_data = output_data > threshold
             output_data = output_data.astype(int)
-            temp = output_data - test_labels
-            FP_diffs = np.count_nonzero(temp > 0)
-            FN_diffs = np.count_nonzero(temp < 0)
-            num_pos = np.count_nonzero(test_labels)
-            num_neg = np.count_nonzero(test_labels == 0)
-            FP = FP_diffs / num_neg
-            FN = FN_diffs / num_pos
-            TP = 1 - FN
-            diffs = np.count_nonzero(temp)
-            acc = 1 - diffs / len(output_data)
+            num_pos = np.count_nonzero(outputs)
+            num_total = len(outputs)
+            FP, TP, thresholds = metrics.roc_curve(test_labels, outputs)
+            acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
+            AUC = metrics.roc_auc_score(test_labels, outputs)
         model_to_test.train()
-
-        return acc, TP, FP
+        
+        return acc, TP, FP, AUC
 
     def evaluate_episode(self):
         self.model.eval()
         last_ind = 1
         plot_data = list(self.test_data)[self.plot_ind]
-        print(len(plot_data))
+#        print(len(plot_data))
         x, y, name = plot_data[0], plot_data[1], plot_data[3]
-        print('we are printing test ', name)
+#        print('we are printing test ', name)
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
         x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
         y = torch.reshape(y, (np.shape(y)[0], last_ind))

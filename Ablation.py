@@ -43,10 +43,25 @@ def perform_ablation(database, args, validation=None):
 #              'Finger Position': [17, 29, 41],
 #              'Finger Speed': [18, 30, 42],
 #              'Finger Effort': [19, 31, 43]}
-    labels = {'Arm Force': [0, 1, 2], 
-              'Arm Torque': [3,4,5],
-              'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
-              'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
+#    labels = {'Arm Force': [0, 1, 2], 
+#              'Arm Torque': [3, 4, 5],
+#              'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
+#              'IMU Gyro': [9, 10, 11, 18, 19, 20, 27, 28, 29],
+#              'Finger Position': [12, 21, 30],
+#              'Finger Speed': [13, 22, 31],
+#              'Finger Effort': [14, 23, 32]}
+    labels = {'Arm Force X': [0],
+              'Arm Force Y': [1],
+              'Arm Force Z': [2],
+              'Arm Torque Roll': [3],
+              'Arm Torque Pitch': [4],
+              'Arm Torque Yaw': [5],
+              'IMU Acceleration X':[6, 15, 24],
+              'IMU Acceleration Y':[7, 16, 25],
+              'IMU Acceleration Z':[8, 17, 26],
+              'IMU Gyro X': [9, 18, 27],
+              'IMU Gyro Y': [10, 19, 28],
+              'IMU Gyro Z': [11, 20, 29],
               'Finger Position': [12, 21, 30],
               'Finger Speed': [13, 22, 31],
               'Finger Effort': [14, 23, 32]}
@@ -66,16 +81,14 @@ def perform_ablation(database, args, validation=None):
         full_lstm = AppleClassifier(full_train_loader, full_test_loader, vars(args), validation_dataset=validation_loader)
         full_lstm.train()
         roc_max_acc = []
-        for i in range(21):
-            roc_acc, _, _ = full_lstm.evaluate(i*0.05, 'test')
-            roc_max_acc.append(roc_acc)
-        performance = np.max(roc_max_acc)
+        roc_acc, _, _, roc_AUC = full_lstm.evaluate(0.5, 'test')
+        performance = np.max(roc_acc)
         print('model finished, saving now.')
 #        print('performance: ', performance)
         full_lstm.save_data()
     best_accuracies = [np.average(performance)]
     best_acc_std_dev = [np.std(best_accuracies)]
-    for phase in range(6):
+    for phase in range(14):
         feature_combo_accuracies = []
         names = []
         indexes = []
@@ -91,21 +104,24 @@ def perform_ablation(database, args, validation=None):
             
             train_state_data = deepcopy(database['train_state'])
             test_state_data = deepcopy(database['test_state'])
-            validation_dataloader = deepcopy(validation['test_state'])
-            
             for episode in range(len(database['train_state'])):
                 for tstep in range(len(database['train_state'][episode])):
                     train_state_data[episode][tstep] = [train_state_data[episode][tstep][used_label] for used_label in used_labels]
             for episode in range(len(database['test_state'])):
                 for tstep in range(len(database['test_state'][episode])):
+#                    print(type(test_state_data[episode][tstep]),type([test_state_data[episode][tstep][used_label] for used_label in used_labels]))
                     test_state_data[episode][tstep] = [test_state_data[episode][tstep][used_label] for used_label in used_labels]
-            for episode in range(len(validation['test_state'])):
-                for tstep in range(len(validation['test_state'][episode])):
-                    validation_dataloader[episode][tstep] = [validation_dataloader[episode][tstep][used_label] for used_label in used_labels]
-
+            if validation is not None:
+                validation_dataloader = deepcopy(validation['test_state'])
+                for episode in range(len(validation['test_state'])):
+                    for tstep in range(len(validation['test_state'][episode])):
+#                        print(type(validation_dataloader[episode][tstep]),type([validation_dataloader[episode][tstep][used_label] for used_label in used_labels]))
+                        validation_dataloader[episode][tstep] = [validation_dataloader[episode][tstep][used_label] for used_label in used_labels]
+                reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], validation['pick_title'], args.batch_size)
+            else:
+                reduced_validation_dataset=None
             reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], database['pick_title'], args.batch_size)
             reduced_test_dataset = RNNDataset(test_state_data, database['test_label'], database['pick_title'], args.batch_size)
-            reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], validation['pick_title'], args.batch_size)
             
             args.input_dim = len(used_labels)
             print('using this many labels', len(used_labels))
@@ -115,11 +131,10 @@ def perform_ablation(database, args, validation=None):
                                             reduced_test_dataset, vars(args),validation_dataset=reduced_validation_dataset)
                 base_lstm.train()
                 roc_max_acc = []
-                for i in range(21):
-                    roc_acc, _, _ = base_lstm.evaluate(i*0.05,'test')
-                    roc_max_acc.append(roc_acc)
+                roc_acc, _, _, roc_AUC = base_lstm.evaluate(0.5,'test')
+                roc_max_acc.append(roc_acc)
 #                print('roc max acc: ', roc_max_acc)
-                performance.append(np.max(roc_max_acc))
+                performance.append(np.max(roc_acc))
                 print('model finished, saving now')
 #                print('performance: ', performance)
                 base_lstm.save_data()

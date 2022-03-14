@@ -105,7 +105,7 @@ class GraspProcessor():
                 for data_file_name in self.csv_order[top_folder][folder]:
                     real_file_name = data_file_name.replace('grasp','pick')
                     episode_state = []
-#                    print('Opening up name', real_file_name)
+                    print('Opening up name', real_file_name)
                     key_thing = data_file_name.split('_')[2]
                     pick_names.append([[key_thing]])
                     with open(path + '/'  + self.mid_level + '/' + top_folder + '/' + folder + '/' + real_file_name, 'r') as csv_file:
@@ -180,7 +180,7 @@ class GraspProcessor():
                 
                 for data_file_name in self.csv_order[top_folder][folder]:
                     episode_state = []
-#                    print('Opening up name', data_file_name)
+                    print('Opening up name', data_file_name)
                     key_thing = data_file_name.split('_')[2]
                     pick_names.append([[key_thing]])
                     with open(path + '/'  + self.mid_level + '/' + top_folder + '/' + folder + '/' + data_file_name, 'r') as csv_file:
@@ -192,29 +192,51 @@ class GraspProcessor():
                             else:
                                 temp = True
                     if len(episode_state) > 0:
-                        e_len = len(episode_state)
+                        e_len =len(episode_state)
                         episode_state = np.array(episode_state)
                         episode_state = episode_state.astype(float)
                         episode_state = episode_state.tolist()
-                        episode_label = [0.5] * int(e_len/4)
                         if folder == 'successful':
-                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
-                            episode_label.extend(middle_label)
-                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+                            episode_label = [1] * int(e_len)
                             labels[top_folder].append(episode_label)
                             pcount += 1
                         elif folder == 'failed':
-                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * -0.5 + 0.5
-                            episode_label.extend(middle_label)
-                            episode_label.extend([0] * int(e_len-int(e_len/4)-int(e_len/2)))
+                            episode_label = [0] * int(e_len)
                             labels[top_folder].append(episode_label)
                             ncount += 1
                         else:
-                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
-                            episode_label.extend(middle_label)
-                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+                            episode_label = [1] * int(e_len)
                             labels[top_folder].append(episode_label)
+                            pcount += 1#                            print(top_folder)
+#                        input(episode_state.copy())
+                            
+#                            
+#                    if len(episode_state) > 0:
+#                        e_len = len(episode_state)
+#                        episode_state = np.array(episode_state)
+#                        episode_state = episode_state.astype(float)
+#                        episode_state = episode_state.tolist()
+#                        episode_label = [0.5] * int(e_len/4)
+#                        if folder == 'successful':
+#                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
+#                            episode_label.extend(middle_label)
+#                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+#                            labels[top_folder].append(episode_label)
+#                            pcount += 1
+#                        elif folder == 'failed':
+#                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * -0.5 + 0.5
+#                            episode_label.extend(middle_label)
+#                            episode_label.extend([0] * int(e_len-int(e_len/4)-int(e_len/2)))
+#                            labels[top_folder].append(episode_label)
+#                            ncount += 1
+#                        else:
+#                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
+#                            episode_label.extend(middle_label)
+#                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+#                            labels[top_folder].append(episode_label)
 #                            print(top_folder)
+                            
+                            
                         states[top_folder].append(episode_state.copy())
                         final_csv_order[top_folder][folder].append(data_file_name)
         if self.csv_order != final_csv_order:

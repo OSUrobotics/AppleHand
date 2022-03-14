@@ -30,6 +30,7 @@ class GRUNet(nn.Module):
         self.tanh = nn.Tanh()
         
     def forward(self, x, h):
+        self.gru.flatten_parameters()
         rnn_x = self.fl(x)
         out, h = self.gru(rnn_x, h)
         out = self.fc(self.relu(out[:,-1]))
@@ -59,6 +60,7 @@ class LSTMNet(nn.Module):
         self.sig = nn.Sigmoid()
         
     def forward(self, x, h):
+        self.lstm.flatten_parameters()
         rnn_x = self.fl(x)
         out, h = self.lstm(rnn_x, h)
         out = self.fc(self.relu(out[:,-1]))

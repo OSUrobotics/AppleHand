@@ -156,7 +156,7 @@ class ExperimentHandler():
         main_path = os.path.join(main_path, 'raw_data/')
         parser = argparse.ArgumentParser()
         parser.add_argument("--model_type", default="LSTM", type=str)  # RNN used
-        parser.add_argument("--epochs", default=25, type=int)  # num epochs trained for
+        parser.add_argument("--epochs", default=100, type=int)  # num epochs trained for
         parser.add_argument("--layers", default=4, type=int)  # num layers in RNN
         parser.add_argument("--hiddens", default=100, type=int)  # num hidden nodes per layer
         parser.add_argument("--drop_prob", default=0.2, type=float)  # drop probability
@@ -244,7 +244,7 @@ class ExperimentHandler():
             self.validation()
     
         # Visualize all plots made
-#        plt.show()
+        plt.show()
 
         # Plot single example if desired
         if self.args.plot_example:
@@ -252,7 +252,8 @@ class ExperimentHandler():
            
         # Perform ablation on feature groups if desired
         if self.args.ablate:
-            perform_ablation(self.test_data, self.args, self.validation_data)
+#            perform_ablation(self.test_data, self.args, self.validation_data)
+            perform_ablation(self.test_data, self.args, None)
 
 
     def plot_acc(self):
@@ -260,10 +261,9 @@ class ExperimentHandler():
         legend = []
         acc_plot = plt.figure(self.figure_count)
         for data in self.data_dict:
-            plt.plot(data['steps'], data['acc'])
-            plt.plot(data['steps'], data['train_acc'])
+            plt.plot(data['steps'], [max(accs) for accs in data['acc']])
+            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
             try:
-#                print(data['validation_acc'])
                 plt.plot(data['steps'][1:], data['validation_acc'])
             except:
                 pass
@@ -274,7 +274,7 @@ class ExperimentHandler():
         plt.xlabel('Steps')
         plt.ylabel('Accuracy')
         plt.title('Accuracy Curve')
-        self.figure_count += 1            
+        self.figure_count += 1
 
     def plot_loss(self):
         legend = []
@@ -294,16 +294,14 @@ class ExperimentHandler():
         legend = []
         print('Plotting true positive and false positive rate over time')
         TPFP_plot = plt.figure(self.figure_count)
-        for data in self.data_dict:
-#            temp = np.array(data['TP'])/(np.array(data['TP'])+np.array(data['FP']))
-#            temp[np.isnan(temp)] = -1
-#            armax = np.argmax(temp)
-#            print('tp and fp for max precision',data['TP'][armax], data['FP'][armax])
-#            input('max precision ' + str(np.max(temp)))
-            plt.plot(data['steps'], data['TP'])
-            plt.plot(data['steps'], data['FP'])
-            legend.append('TP_' + data['ID'])
-            legend.append('FP_' + data['ID'])
+        for policy in self.classifiers:
+            _, best_TP, best_FP, _ = policy.get_best_performance([0,-1])
+#            print(best_TP,best_FP)
+            ID = policy.identifier
+            plt.plot(range(len(best_TP)), best_TP)
+            plt.plot(range(len(best_FP)), best_FP)
+            legend.append('TP_' + ID)
+            legend.append('FP_' + ID)
         plt.legend(legend)
         plt.xlabel('Steps')
         plt.ylabel('True and False Positive Rate')
@@ -312,7 +310,6 @@ class ExperimentHandler():
     
     def plot_ROC(self):
         legend = []
-        print('Plotting an ROC curve with threshold increments of 0.05')
         count = 0
         if self.args.check_RF:
             RF_train_data = []
@@ -335,34 +332,20 @@ class ExperimentHandler():
             pass
         ROC_plot = plt.figure(self.figure_count)
         for policy in self.classifiers:
-            accs = []
-            TPs = [1]
-            FPs = [1]
-            flag = False
-            detail = 101
-            for i in range(detail):
-                thold = i/(detail-1)
-                try:
-                    acc, TP, FP = policy.evaluate(threshold=thold, current=flag)
-                except RuntimeError:
-                    flag = True
-                    acc, TP, FP = policy.evaluate(threshold=thold, current=True)
-#                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
-                TPs.append(TP)
-                FPs.append(FP)
-                accs.append(acc)
-#            print(f'policy {count} finished')
-            plt.plot(FPs, TPs)
+            max_acc, best_TP, best_FP, _ = policy.get_best_performance([0,-1])
+            print('best test accuracy is ', max(max_acc))
+            best_epoch = np.argmax(max_acc)
+            plt.plot(policy.FP_rate[best_epoch],policy.TP_rate[best_epoch])
             legend.append(policy.identifier)
             count += 1
-            print('best test accuracy is ', np.max(accs))
+
         baseline = [0, 1]
         legend.append('Random Baseline')
-#        plt.plot(baseline, baseline, linestyle='--')
-#        plt.legend(legend)
-#        plt.xlabel('False Positive Rate')
-#        plt.ylabel('True Positive Rate')
-#        plt.title('Test ROC')
+        plt.plot(baseline, baseline, linestyle='--')
+        plt.legend(legend)
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Test ROC')
 
         self.figure_count += 1
 
@@ -408,71 +391,36 @@ class ExperimentHandler():
         else:
             pass
         ROC_plot = plt.figure(self.figure_count)
+        flag = False
         for policy in self.classifiers:
-            accs = []
-            TPs = [1]
-            FPs = [1]
-            flag = False
-            detail = 101
             policy.load_dataset(self.train_dataset, self.validation_dataset)
-            for i in range(detail):
-                thold = i/(detail-1)
-                try:
-                    acc, TP, FP = policy.evaluate(threshold=thold, current=flag)
-                except RuntimeError:
-                    flag = True
-                    acc, TP, FP = policy.evaluate(threshold=thold, current=True)
-#                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
-                TPs.append(TP)
-                FPs.append(FP)
-                accs.append(acc)
-#            print(f'policy {count} finished')
-            plt.plot(FPs, TPs)
+            try:
+                acc, TP, FP, AUC = policy.evaluate(threshold=0.5, current=flag, test_set='validation')
+            except RuntimeError:
+                acc, TP, FP, ACU = policy.evaluate(threshold=0.5, current=True, test_set='validation')
+            plt.plot(FP,TP)
             legend.append(policy.identifier)
             count += 1
-            print('best validation accuracy is ', np.max(accs))
-#        print('checking best validation model')
-#        for policy in self.classifiers:
-#            policy.model = deepcopy(policy.val_model)
-#            accs = []
-#            TPs = [1]
-#            FPs = [1]
-#            flag = True
-#            detail = 101
-#            policy.load_dataset(self.train_dataset, self.validation_dataset)
-#            for i in range(detail):
-#                thold = i/(detail-1)
-#                try:
-#                    acc, TP, FP = policy.evaluate(threshold=thold, current=flag)
-#                except RuntimeError:
-#                    flag = True
-#                    acc, TP, FP = policy.evaluate(threshold=thold, current=True)
-#                print(f'threshold {thold} has tp-fp {TP}-{FP} and acc {acc}')
-#                TPs.append(TP)
-#                FPs.append(FP)
-#                accs.append(acc)
-#            print(f'policy {count} finished')
-#            plt.plot(FPs, TPs)
-#            legend.append(policy.identifier)
-#            count += 1
-#            print('best validation accuracy is ', np.max(accs))
-        
+            best_thold = np.argmax(acc)
+            print('best validation accuracy is ', acc[best_thold], TP[best_thold], FP[best_thold])
         baseline = [0, 1]
         legend.append('Random Baseline')
-#        plt.plot(baseline, baseline, linestyle='--')
-#        plt.legend(legend)
-#        plt.xlabel('False Positive Rate')
-#        plt.ylabel('True Positive Rate')
-#        plt.title('Validation ROC')
+        plt.plot(baseline, baseline, linestyle='--')
+        plt.legend(legend)
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Validation ROC')
 
         self.figure_count += 1
 
     def plot_example(self):
+        
         legend = ['Correct Output']
         print('Plotting single episode')
         count = 0
         single_episode_flag = True
         while single_episode_flag:
+            plt.clf()
             single_episode_plot = plt.figure(self.figure_count)
             plot_bounds = [self.classifiers[0].visualization_range[0], self.classifiers[0].visualization_range[1]]
             first_plot = True
@@ -498,15 +446,18 @@ class ExperimentHandler():
                         rounded_outputs.append(0.5)
                 plt.scatter(range(len(outputs)), outputs, marker="+")
                 plt.scatter(range(len(rounded_outputs)), rounded_outputs, marker="x")
+            
             plt.legend(legend)
+            
             plt.ylim(-0.05, 1.1)
+            print('just did e_name',e_name[0][0], ' last thing was ', y[-1][0] ) 
             plt.show()
             self.figure_count += 1
+            
             flag_choice = input('generate another plot? y/n')
             if flag_choice.lower() == 'n':
                 single_episode_flag = False
             count += 1
-            self.figure_count += 1
         return e_name, outputs, y
 
 if __name__ == "__main__":
