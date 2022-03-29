@@ -16,7 +16,8 @@ from new_csv_process import GraspProcessor
 import argparse
 from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
-from utils import RNNDataset
+# from utils import RNNDataset
+from alt_utils import RNNDataset
 # from itertools import islice
 import os
 from sklearn.ensemble import RandomForestClassifier
@@ -290,7 +291,6 @@ class ExperimentHandler:
         TPFP_plot = plt.figure(self.figure_count)
         for policy in self.classifiers:
             _, best_TP, best_FP, _ = policy.get_best_performance([0, -1])
-            #            print(best_TP,best_FP)
             ID = policy.identifier
             plt.plot(range(len(best_TP)), best_TP)
             plt.plot(range(len(best_FP)), best_FP)

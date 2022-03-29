@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
+
 class RNNDataset(IterableDataset):
     def __init__(self, state_list, label_list, episode_names, batch_size, range_params=None):
         """
@@ -23,9 +24,11 @@ class RNNDataset(IterableDataset):
         :param batch_size: number of episodes returned in a single batch
         :param range_params: min and max for each parameter to normalize data
         """
-        self.label_list = label_list
         self.batch_size = batch_size
-        self.episode_names = episode_names
+        self.change_success_rate = False
+        self.episodes = []
+        for state, label, name in zip(state_list, label_list, episode_names):
+            self.episodes.append({'state': state, 'label': label, 'name': name})
         self.time_getting_eps = 0
         self.eps = 0
         try:
@@ -59,8 +62,16 @@ class RNNDataset(IterableDataset):
         function to shuffle all episodes in dataset
         :return: shuffled states, labels, lengths of episodes, and names of episodes
         """
-        shuffled_state, shuffled_label, shuffled_name = zip(
-            *random.sample(list(zip(self.state_list, self.label_list, self.episode_names)), len(self.state_list)))
+        if self.change_success_rate:
+            
+            shuffled_state = [temp['state'] for temp in self.episodes]
+            shuffled_label = [temp['label'] for temp in self.episodes]
+            shuffled_name = [temp['name'] for temp in self.episodes]
+        else:
+            np.random.shuffle(self.episodes)
+            shuffled_state = [temp['state'] for temp in self.episodes]
+            shuffled_label = [temp['label'] for temp in self.episodes]
+            shuffled_name = [temp['name'] for temp in self.episodes]
         batched_data = list(self.divide_into_batches(shuffled_state, shuffled_label, shuffled_name))
         shuffled_state = [np.concatenate(arr_list[0]) for arr_list in batched_data]
         shuffled_label = [np.concatenate(arr_list[1]) for arr_list in batched_data]
@@ -73,6 +84,7 @@ class RNNDataset(IterableDataset):
 
     def get_episodes(self):
         """
+        current time is 0.0639 (seems new method slightly better)
         produces zip for iter function of shuffled episode data
         """
         t0 = time.time()
@@ -80,7 +92,7 @@ class RNNDataset(IterableDataset):
         state_iter = iter(states)
         label_iter = iter(labels)
         t1 = time.time()
-        self.time_getting_eps += t1-t0
+        self.time_getting_eps += t1 - t0
         self.eps += 1
         if self.eps % 10 == 1:
             self.print_times()
@@ -97,7 +109,7 @@ class RNNDataset(IterableDataset):
         return len(self.state_list)
 
     def print_times(self):
-        print('average time spend shuffling dataset ',self.time_getting_eps/self.eps)
+        print(self.time_getting_eps / self.eps)
 
     @staticmethod
     def scale(unscaled_list, range_params=None):
@@ -115,9 +127,10 @@ class RNNDataset(IterableDataset):
             for j in range(len(unscaled_list[i])):
                 for k in range(len(unscaled_list[i][j])):
                     unscaled_list[i][j][k] = (unscaled_list[i][j][k] - range_params['bot'][k]) / (
-                                range_params['top'][k] - range_params['bot'][k])
+                            range_params['top'][k] - range_params['bot'][k])
         return unscaled_list, range_params
 
+    def
 
 def unpack_arr(long_arr):
     """
@@ -125,3 +138,14 @@ def unpack_arr(long_arr):
     :param: long_arr - array to be unpacked"""
     new_arr = [item for sublist in long_arr for item in sublist]
     return new_arr
+
+
+def name_counting_sort(name_arr, grade_arr):
+    unique_names = list(np.unique(name_arr))
+    group_grades = np.zeros(np.shape(unique_names))
+    real_grades = np.copy.deepcopy(grade_arr)
+    real_grades[real_grades == 0] = -1
+    for name, grade in zip(name_arr, grade_arr):
+        group_grades[unique_names.index(name)] += grade
+    grade_dict = {'pick_names': unique_names, 'group_decision': group_grades > 0}
+    return grade_dict

@@ -274,6 +274,7 @@ class AppleClassifier:
                     self.val_model = copy.deepcopy(self.model)
                     val_AUC = validation_AUC
             if epoch % eval_period == 0:
+                # print('average time spend shuffling dataset ', self.train_data.print_times())
                 max_acc, best_TP, best_FP, max_acc_train = self.get_best_performance([epoch - eval_period, epoch])
                 best_epoch = np.argmax(max_acc)
                 print(
@@ -296,6 +297,9 @@ class AppleClassifier:
             net_loss = 0
         print(f'Finished training, best recorded model had AUC = {backup_AUC}')
         self.model = copy.deepcopy(self.best_model)
+
+    def group_eval(self):
+
 
     def evaluate(self, threshold=0.5, test_set='test', current=True):
         """
@@ -329,7 +333,8 @@ class AppleClassifier:
             data_shape = self.validation_size
 
         # loads outputs and test labels into lists for evaluation
-        for x, y, lens, _ in data:
+        all_names = []
+        for x, y, lens, names in data:
             hidden_layer = model_to_test.init_hidden(np.shape(x)[0])
             final_indexes.extend(lens)
             x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
@@ -340,6 +345,7 @@ class AppleClassifier:
             count += 1
             outputs = np.append(outputs, out.to('cpu').detach().numpy())
             test_labels = np.append(test_labels, y.to('cpu').detach().numpy())
+            all_names.extend(names)
 
         if self.eval_type == 'last':
             # Evaluates only the last point in the sequence
@@ -408,9 +414,7 @@ class AppleClassifier:
         self.model.eval()
         last_ind = 1
         plot_data = list(self.test_data)[self.plot_ind]
-        #        print(len(plot_data))
         x, y, name = plot_data[0], plot_data[1], plot_data[3]
-        #        print('we are printing test ', name)
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
         x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
         y = torch.reshape(y, (np.shape(y)[0], last_ind))
