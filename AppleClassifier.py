@@ -10,7 +10,7 @@ import copy
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler
 from RNNs import GRUNet, LSTMNet
 import pickle as pkl
 import datetime
@@ -76,10 +76,18 @@ class AppleClassifier:
             self.loss_fn = nn.MSELoss()
             self.network_type = 1
 
-        self.train_data = DataLoader(train_dataset, shuffle=False,
-                                     batch_size=None)
-        self.test_data = DataLoader(test_dataset, shuffle=False,
-                                    batch_size=None)
+        try:
+            s_f_bal = 
+            self.data_sampler = WeightedRandomSampler(s_f_bal, param_dict['batch_size'], replacement=False)
+            self.train_data = DataLoader(train_dataset, shuffle=False,
+                                         batch_size=None, sampler=self.data_sampler)
+            self.test_data = DataLoader(test_dataset, shuffle=False,
+                                        batch_size=None, sampler=self.data_sampler)
+        except:
+            self.train_data = DataLoader(train_dataset, shuffle=False,
+                                         batch_size=None)
+            self.test_data = DataLoader(test_dataset, shuffle=False,
+                                        batch_size=None)
         if validation_dataset is not None:
             self.validation_data = DataLoader(validation_dataset, shuffle=False,
                                               batch_size=None)
@@ -123,6 +131,8 @@ class AppleClassifier:
         self.label_times = []
         print('input size: ', self.input_dim)
         print('number of weights in model ', self.count_parameters())
+        self.group_acc = []
+        self.group_val_acc = []
 
     def count_parameters(self):
         """
@@ -298,8 +308,24 @@ class AppleClassifier:
         print(f'Finished training, best recorded model had AUC = {backup_AUC}')
         self.model = copy.deepcopy(self.best_model)
 
-    def group_eval(self):
+#    def group_eval(self):
+#
 
+    @staticmethod
+    def name_counting_sort(name_arr, grade_arr):
+        '''
+        currently not a voting, just a summation
+        '''
+        unique_names = list(np.unique(name_arr))
+        unique_names.sort()
+        group_grades = np.zeros(np.shape(unique_names))
+        real_grades = copy.deepcopy(grade_arr)
+        real_grades[real_grades == 0] = -1
+        for name, grade in zip(list(name_arr), grade_arr):
+            group_grades[unique_names.index(name)] += grade-0.5
+        print(group_grades[0:10])
+        grade_dict = {'pick_names': unique_names, 'group_decision': group_grades}
+        return grade_dict
 
     def evaluate(self, threshold=0.5, test_set='test', current=True):
         """
@@ -355,9 +381,27 @@ class AppleClassifier:
             last_ind_label = test_labels[final_indexes]
             num_pos = np.count_nonzero(last_ind_label)
             num_total = len(last_ind_label)
+            print('OUTPUT')
+            group_grade = AppleClassifier.name_counting_sort(all_names, last_ind_output)
+            print('ACTUAL LABEL')
+            correct_group_grade = AppleClassifier.name_counting_sort(all_names, last_ind_label)
+            correct_group_grade['group_decision'] = correct_group_grade['group_decision'] > 0
+            assert(len(group_grade['group_decision']) == len(correct_group_grade['group_decision']))
+            num_group_total = len(group_grade['group_decision'])
+            num_group_pos = np.count_nonzero(correct_group_grade['group_decision'])
+            FP_group, TP_group, thresholds_group = metrics.roc_curve(correct_group_grade['group_decision'], group_grade['group_decision'])
+            acc_group = (TP_group * num_group_pos + (1 - FP_group) * (num_group_total - num_group_pos)) / num_group_total
+            AUC_group = metrics.roc_auc_score(correct_group_grade['group_decision'],group_grade['group_decision'])
             FP, TP, thresholds = metrics.roc_curve(last_ind_label, last_ind_output)
             acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
             AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
+            print('for this round: ')
+            print('Group accuracy = ', max(acc_group))
+            print('Non-group accuracy = ', max(acc))
+            if test_set == 'test':
+                self.group_acc.append(max(acc_group))
+            else:
+                self.group_val_acc.append(max(acc_group))
         elif self.eval_type == 'alt_last':
             # Evaluates only the last point in the sequence with 3 classifications, success, failure and undecided
             # this only works since all examples are the same length
@@ -451,3 +495,10 @@ class AppleClassifier:
         file = open(filename + '.pkl', 'wb')
         pkl.dump(classifier_dict, file)
         file.close()
+
+        filename2 = './generated_data/' + self.identifier + datetime.datetime.now().strftime("%m_%d_%y_%H%M") + '_group_stats'
+        group_dict = {'group acc': self.group_acc, 'group validation acc': self.group_val_acc}
+        file = open(filename2 + '.pkl', 'wb')
+        pkl.dump(group_dict, file)
+        file.close()
+        
