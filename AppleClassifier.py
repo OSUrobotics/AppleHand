@@ -10,7 +10,7 @@ import copy
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler
+from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler, SequentialSampler
 from RNNs import GRUNet, LSTMNet
 import pickle as pkl
 import datetime
@@ -53,6 +53,7 @@ class AppleClassifier:
         try:
             self.input_dim = param_dict['input_dim']
         except KeyError:
+            print('we are here ',test_dataset.shape[2])
             self.input_dim = test_dataset.shape[2]
         try:
             self.outputs = param_dict['outputs']
@@ -76,18 +77,49 @@ class AppleClassifier:
             self.loss_fn = nn.MSELoss()
             self.network_type = 1
 
+        self.batch_size = param_dict['batch_size']
+        simple_test_sampler = SequentialSampler(test_dataset)
+#        num_pos = 0
+#        num_neg = 0
+#        for state, label, lens, names in validation_dataset:
+#            if label[-1] == 0:
+#                num_neg += 1
+#            elif label[-1] == 1:
+#                num_pos += 1
+#            else:
+#                print('yo wtf?')
+#        print('perecnt we should use is ', num_pos/(num_pos+num_neg))
         try:
-            s_f_bal = 
-            self.data_sampler = WeightedRandomSampler(s_f_bal, param_dict['batch_size'], replacement=False)
-            self.train_data = DataLoader(train_dataset, shuffle=False,
-                                         batch_size=None, sampler=self.data_sampler)
-            self.test_data = DataLoader(test_dataset, shuffle=False,
-                                        batch_size=None, sampler=self.data_sampler)
-        except:
-            self.train_data = DataLoader(train_dataset, shuffle=False,
-                                         batch_size=None)
-            self.test_data = DataLoader(test_dataset, shuffle=False,
-                                        batch_size=None)
+            num_pos = 0
+            num_neg = 0
+            for state, label, lens, names in train_dataset:
+                if label[-1] == 0:
+                    num_neg += 1
+                elif label[-1] == 1:
+                    num_pos += 1
+                else:
+                    print('error! episode neither success or failure. setting weight to 0.5')
+                    
+            pos_ratio = 0.5
+            neg_ratio = (1-param_dict['s_f_bal'])*num_pos*pos_ratio/(num_neg*param_dict['s_f_bal'])
+        except TypeError:
+            pos_ratio = 0.5
+            neg_ratio = 0.5
+            print('no desired s_f balance, sampling all episodes equally')
+        s_f_bal = []
+        for state, label, lens, names in train_dataset:
+            if label[-1] == 0:
+                s_f_bal.append(neg_ratio)
+            elif label[-1] == 1:
+                s_f_bal.append(pos_ratio)
+            else:
+                print('error! episode neither success or failure. setting weight to 0.5')
+                s_f_bal.append(0.5)
+        self.data_sampler = WeightedRandomSampler(s_f_bal, param_dict['batch_size'], replacement=False)
+        self.train_data = DataLoader(train_dataset, shuffle=False,
+                                     batch_size=param_dict['batch_size'], sampler=self.data_sampler)
+        self.test_data = DataLoader(test_dataset, shuffle=False,
+                                        batch_size=None,sampler=simple_test_sampler)
         if validation_dataset is not None:
             self.validation_data = DataLoader(validation_dataset, shuffle=False,
                                               batch_size=None)
@@ -232,11 +264,11 @@ class AppleClassifier:
         self.model.train()
         print('starting training, finding the starting accuracy for random model of type', self.outputs)
         acc, TP, FP, AUC = self.evaluate(0.5)
-        train_acc, _, _, _ = self.evaluate(0.5, 'train')
+#        train_acc, _, _, _ = self.evaluate(0.5, 'train')
         best_ind = np.argmax(acc)
         print(f'starting: accuracy - {acc[best_ind]}, TP rate - {TP[best_ind]}, FP rate - {FP[best_ind]}')
         self.accuracies.append(acc)
-        self.train_accuracies.append(train_acc)
+#        self.train_accuracies.append(train_acc)
         self.TP_rate.append(TP)
         self.FP_rate.append(FP)
         self.losses.append(0)
@@ -249,34 +281,42 @@ class AppleClassifier:
             epoch_loss = 0
             step = 0
             t0 = time.time()
-            for x, label, lens, names in self.train_data:
-                hiddens = self.model.init_hidden(np.shape(x)[0])
-                x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
-                if self.model_type == "GRU":
-                    hiddens = hiddens.data
-                else:
-                    hiddens = tuple([e.data for e in hiddens])
-                pred, hiddens = self.model(x.to(self.device).float(), hiddens)
-                for param in self.model.parameters():
-                    if torch.isnan(param).any():
-                        print('shit went sideways')
-                if self.network_type == 1:
-                    pred = torch.reshape(pred, (np.shape(x)[0],))
-                    if self.eval_type == 'last':
-                        loss = self.loss_fn(pred, label.to(self.device).float())
+            for _ in range(int(self.train_size[0]/self.batch_size)):
+                for x, label, lens, names in self.train_data:
+                    temp = np.shape(x)
+                    if len(temp) == 2:
+                        reshape_param = temp[0]
+                    elif len(temp) == 3:
+                        reshape_param = temp[0]*temp[1]
+                    hiddens = self.model.init_hidden(reshape_param)
+                    x = torch.reshape(x, (reshape_param, 1, self.input_dim))
+                    label = torch.reshape(label, (reshape_param,1))
+                    
+                    if self.model_type == "GRU":
+                        hiddens = hiddens.data
                     else:
-                        loss = self.loss_fn(pred, label.to(self.device).float())
-                else:
-                    loss = self.loss_fn(pred.to('cpu'), label.to('cpu').float())
-                optim.zero_grad()
-                loss.backward()
-                optim.step()
-                net_loss += float(loss)
-                epoch_loss += float(loss)
-                step += 1
+                        hiddens = tuple([e.data for e in hiddens])
+                    pred, hiddens = self.model(x.to(self.device).float(), hiddens)
+                    for param in self.model.parameters():
+                        if torch.isnan(param).any():
+                            print('shit went sideways')
+                    if self.network_type == 1:
+                        if self.eval_type == 'last':
+                            loss = self.loss_fn(pred, label.to(self.device).float())
+                        else:
+                            loss = self.loss_fn(pred, label.to(self.device).float())
+                    else:
+                        loss = self.loss_fn(pred.to('cpu'), label.to('cpu').float())
+                    optim.zero_grad()
+                    loss.backward()
+                    optim.step()
+                    net_loss += float(loss)
+                    epoch_loss += float(loss)
+                    step += 1
             t1 = time.time()
+#            print('percent positive = ', counter/tot_seen)
             acc, TP, FP, AUC = self.evaluate(0.5)
-            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
+#            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
             if self.validation_data is not None:
                 validation_acc, validation_tp, validation_fp, validation_AUC = self.evaluate(0.5, 'validation')
                 self.validation_accuracies.append(validation_acc)
@@ -289,7 +329,7 @@ class AppleClassifier:
                 best_epoch = np.argmax(max_acc)
                 print(
                     f'epoch {epoch}: test accuracy  - {max_acc[best_epoch]}, loss - {sum(self.losses[epoch - eval_period:epoch])}, TP rate - {best_TP[best_epoch]}, FP rate - {best_FP[best_epoch]}')
-                print(f'epoch {epoch}: train accuracy - {max(max_acc_train)}')
+#                print(f'epoch {epoch}: train accuracy - {max(max_acc_train)}')
                 if self.validation_data is not None:
                     print(
                         f'epoch {epoch}: validation accuracy - {max([max(temp) for temp in self.validation_accuracies[epoch - eval_period:epoch]])}')
@@ -303,9 +343,10 @@ class AppleClassifier:
             self.steps.append(epoch)
             self.TP_rate.append(TP)
             self.FP_rate.append(FP)
-            self.train_accuracies.append(train_acc)
+#            self.train_accuracies.append(train_acc)
             net_loss = 0
         print(f'Finished training, best recorded model had AUC = {backup_AUC}')
+        print(f'best group acc:  {max(self.group_acc)}   val acc: {max(self.group_val_acc)}')
         self.model = copy.deepcopy(self.best_model)
 
 #    def group_eval(self):
@@ -323,7 +364,6 @@ class AppleClassifier:
         real_grades[real_grades == 0] = -1
         for name, grade in zip(list(name_arr), grade_arr):
             group_grades[unique_names.index(name)] += grade-0.5
-        print(group_grades[0:10])
         grade_dict = {'pick_names': unique_names, 'group_decision': group_grades}
         return grade_dict
 
@@ -360,30 +400,44 @@ class AppleClassifier:
 
         # loads outputs and test labels into lists for evaluation
         all_names = []
+        flag = True
+        # x is either [episode_length,num_sensors] or [batch_size,episode_length,num_sensors]
         for x, y, lens, names in data:
-            hidden_layer = model_to_test.init_hidden(np.shape(x)[0])
-            final_indexes.extend(lens)
-            x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
-            y = torch.reshape(y, (np.shape(y)[0], last_ind))
+            if flag:
+                flag=False
+                temp = np.shape(x)
+                if len(temp) == 2:
+                    reshape_param = temp[0]
+                elif len(temp) == 3:
+                    reshape_param = temp[0]*temp[1]
+            hidden_layer = model_to_test.init_hidden(reshape_param)
+            final_indexes.append(lens)
+#            print('final indexes while we goin', final_indexes)
+            x = torch.reshape(x, (reshape_param, 1, self.input_dim))
+            y = torch.reshape(y, (reshape_param, last_ind))
             if self.model_type == 'LSTM':
                 hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = model_to_test(x.to(self.device).float(), hidden_layer)
             count += 1
+#            print(out.to('cpu').detach().numpy()[-1])
             outputs = np.append(outputs, out.to('cpu').detach().numpy())
             test_labels = np.append(test_labels, y.to('cpu').detach().numpy())
-            all_names.extend(names)
+            all_names.extend(names[0])
+            
 
         if self.eval_type == 'last':
             # Evaluates only the last point in the sequence
+#            print('final indexes before doing the for loop,', final_indexes)
             final_indexes = [sum(final_indexes[:i]) - 1 for i in range(1, len(final_indexes) + 1)]
             # this only works since all examples are the same length
+#            print('final indexes after the for loop',final_indexes)
             last_ind_output = outputs[final_indexes]
             last_ind_label = test_labels[final_indexes]
             num_pos = np.count_nonzero(last_ind_label)
             num_total = len(last_ind_label)
-            print('OUTPUT')
+#            print('OUTPUT')
             group_grade = AppleClassifier.name_counting_sort(all_names, last_ind_output)
-            print('ACTUAL LABEL')
+#            print('ACTUAL LABEL')
             correct_group_grade = AppleClassifier.name_counting_sort(all_names, last_ind_label)
             correct_group_grade['group_decision'] = correct_group_grade['group_decision'] > 0
             assert(len(group_grade['group_decision']) == len(correct_group_grade['group_decision']))
@@ -395,9 +449,9 @@ class AppleClassifier:
             FP, TP, thresholds = metrics.roc_curve(last_ind_label, last_ind_output)
             acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
             AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
-            print('for this round: ')
-            print('Group accuracy = ', max(acc_group))
-            print('Non-group accuracy = ', max(acc))
+#            print('for this round: ')
+#            print('Group accuracy = ', max(acc_group))
+#            print('Non-group accuracy = ', max(acc))
             if test_set == 'test':
                 self.group_acc.append(max(acc_group))
             else:

@@ -69,7 +69,7 @@ class GraspProcessor():
                 print()
                 print('all files saved')
                 self.test_combined_data = combined_data
-#        self.save_csv('gim')
+        self.save_csv('gim')
 
     def process_data_pick(self, path, validate=False):
         """
@@ -250,15 +250,17 @@ class GraspProcessor():
         file.close()
         print()
         print('all files saved')
+        self.save_csv('gim')
 
     def save_csv(self, filename, dataset_name=None):
         
         #TODO: Make this a way to actually grab the right set of data instead of a cobbled together mess
         if dataset_name is None:
-            dataset_name = 'combined_test'
+            dataset_name = 'combined_bill'
         if dataset_name == 'combined_test':
-            dataset = self.test_combined_data
-            with open('train_test_combined.csv','w+') as file:
+            dataset = self.test_grasp_data
+            print([key for key in dataset.keys()])
+            with open('train_test_grasp.csv','w+') as file:
                 z = csv.writer(file)
                 for episode_state, episode_label in zip(dataset['train_state'], dataset['train_label']):
                     for timestep_state, timestep_label in zip(episode_state,episode_label):
@@ -266,8 +268,8 @@ class GraspProcessor():
                         temp.extend([timestep_label])
                         z.writerow(temp)
         elif dataset_name == 'combined_bill':
-#            dataset = self.test_combined_data
-#            with open('proxy_train_combined_bill.csv','w+') as file:
+#            dataset = self.test_grasp_data
+#            with open('proxy_train_grasp_bill.csv','w+') as file:
 #                z = csv.writer(file)
 #                for episode_state, episode_label in zip(dataset['train_state'], dataset['train_label']):
 #                    temp = []
@@ -275,7 +277,7 @@ class GraspProcessor():
 #                        temp.extend(timestep_state)
 #                    temp.extend([timestep_label])
 #                    z.writerow(temp)
-#            with open('proxy_test_combined_bill.csv','w+') as file:
+#            with open('proxy_test_grasp_bill.csv','w+') as file:
 #                z = csv.writer(file)
 #                for episode_state, episode_label in zip(dataset['test_state'], dataset['test_label']):
 #                    temp = []
@@ -283,13 +285,14 @@ class GraspProcessor():
 #                        temp.extend(timestep_state)
 #                    temp.extend([timestep_label])
 #                    z.writerow(temp)            
-            dataset = self.validation_combined_data
-            with open('proxy_real_combined_bill.csv','w+') as file:
+            dataset = self.validation_grasp_data
+            print([key for key in dataset.keys()])
+            with open('proxy_triple_check.csv','w+') as file:
                 z = csv.writer(file)
                 for episode_state, episode_label in zip(dataset['test_state'], dataset['test_label']):
                     temp = []
                     for timestep_state, timestep_label in zip(episode_state,episode_label):
-                        temp.extend(timestep_state)
+                        temp.extend(timestep_state[0:3])
                     temp.extend([timestep_label])
                     z.writerow(temp)
         input('did i do well?')

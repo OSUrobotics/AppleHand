@@ -17,7 +17,7 @@ import argparse
 from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
 #from utils import RNNDataset
-from alt_utils import RNNDataset, RNNSamplerDataset
+from alt_utils import RNNDataset
 # from itertools import islice
 import os
 from sklearn.ensemble import RandomForestClassifier
@@ -185,6 +185,7 @@ class ExperimentHandler:
         parser.add_argument("--validate", default=False, type=bool)
         parser.add_argument("--pick", default=False, type=bool)
         parser.add_argument("--validation_path", default=None, type=str)
+        parser.add_argument("--s_f_bal", default=None, type=float)
 
         args = parser.parse_args()
         if args.used_features is not None:
@@ -219,8 +220,6 @@ class ExperimentHandler:
             self.classifiers.append(old_classifier)
             self.data_dict.append(old_classifier.get_data_dict())
         self.figure_count = 1
-
-
 
         # Plot accuracy over time if desired
         if self.args.plot_acc:
@@ -263,13 +262,14 @@ class ExperimentHandler:
         acc_plot = plt.figure(self.figure_count)
         for data in self.data_dict:
             plt.plot(data['steps'], [max(accs) for accs in data['acc']])
-            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
+#            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
             try:
-                plt.plot(data['steps'][1:], data['validation_acc'])
+                plt.plot(data['steps'][1:], [max(accs) for accs in data['validation_acc']])
             except:
+                print('no validation acc')
                 pass
             legend.append(data['ID'] + ' accuracy')
-            legend.append(data['ID'] + ' training accuracy')
+#            legend.append(data['ID'] + ' training accuracy')
             legend.append(data['ID'] + ' validation accuracy')
         plt.legend(legend)
         plt.xlabel('Steps')
