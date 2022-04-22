@@ -16,7 +16,7 @@ from new_csv_process import GraspProcessor
 import argparse
 from AppleClassifier import AppleClassifier
 from Ablation import perform_ablation
-# from utils import RNNDataset
+#from utils import RNNDataset
 from alt_utils import RNNDataset
 # from itertools import islice
 import os
@@ -62,7 +62,7 @@ class ExperimentHandler:
                 self.validation_data = self.make_float(self.validation_data)
                 file.close()
         else:
-            file = open('apple_grasp_dataset.pkl', 'rb')
+            file = open('train_test_grasp_dataset.pkl', 'rb')
             print('opening apple grasp datset')
             self.test_data = pkl.load(file)
             self.test_data = self.make_float(self.test_data)
@@ -106,7 +106,7 @@ class ExperimentHandler:
             if self.args.used_features is None:
                 self.validation_dataset = RNNDataset(self.validation_data['test_state'],
                                                      self.validation_data['test_label'],
-                                                     self.validation_data['pick_title'], self.args.batch_size,
+                                                     self.validation_data['test_pick_title'], self.args.batch_size,
                                                      range_params=params)
             else:
                 used_labels = []
@@ -114,15 +114,18 @@ class ExperimentHandler:
                     used_labels.extend(self.labels[label])
                 self.validation_dataset = RNNDataset(
                     list(np.array(self.validation_data['test_state'])[:, :, used_labels]),
-                    self.validation_data['test_label'], self.validation_data['pick_title'], self.args.batch_size,
+                    self.validation_data['test_label'], self.validation_data['test_pick_title'], self.args.batch_size,
                     range_params=params)
         else:
+            print('building dataset')
             if self.args.used_features is None:
+                print('first dataset')
                 self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'],
-                                                self.test_data['pick_title'], self.args.batch_size, range_params=params)
+                                                self.test_data['train_pick_title'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
+                print('second dataset')
                 self.test_dataset = RNNDataset(self.test_data['test_state'], self.test_data['test_label'],
-                                               self.test_data['pick_title'], self.args.batch_size, range_params=params)
+                                               self.test_data['test_pick_title'], self.args.batch_size, range_params=params)
                 np.save('proxy_mins_and_maxs', params)
             else:
                 used_labels = []
@@ -182,6 +185,7 @@ class ExperimentHandler:
         parser.add_argument("--validate", default=False, type=bool)
         parser.add_argument("--pick", default=False, type=bool)
         parser.add_argument("--validation_path", default=None, type=str)
+        parser.add_argument("--s_f_bal", default=None, type=float)
 
         args = parser.parse_args()
         if args.used_features is not None:
@@ -258,13 +262,14 @@ class ExperimentHandler:
         acc_plot = plt.figure(self.figure_count)
         for data in self.data_dict:
             plt.plot(data['steps'], [max(accs) for accs in data['acc']])
-            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
+#            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
             try:
-                plt.plot(data['steps'][1:], data['validation_acc'])
+                plt.plot(data['steps'][1:], [max(accs) for accs in data['validation_acc']])
             except:
+                print('no validation acc')
                 pass
             legend.append(data['ID'] + ' accuracy')
-            legend.append(data['ID'] + ' training accuracy')
+#            legend.append(data['ID'] + ' training accuracy')
             legend.append(data['ID'] + ' validation accuracy')
         plt.legend(legend)
         plt.xlabel('Steps')
