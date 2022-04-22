@@ -22,7 +22,8 @@ class GraspProcessor():
         self.csv_order = {'training_set':{'successful':[],'failed':[], 'could_be_success':[]},'test_set':{'successful':[],'failed':[], 'could_be_success':[]}}
 
         self.top_level = ['training_set', 'test_set']
-        self.mid_level = 'pp4_folders_labeled'
+#        self.mid_level = 'pp4_folders_labeled'
+        self.mid_level = 'new_pp4_folders_labeled'
         self.bot_level = ['successful', 'failed', 'could_be_success']
         self.data_labels = {'Arm Force': [0, 1, 2],
                             'Arm Torque': [3, 4, 5],

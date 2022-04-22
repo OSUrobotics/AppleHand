@@ -298,8 +298,8 @@ class AppleClassifier:
         print(f'Finished training, best recorded model had AUC = {backup_AUC}')
         self.model = copy.deepcopy(self.best_model)
 
-    def group_eval(self):
-
+#    def group_eval(self):
+#
 
     def evaluate(self, threshold=0.5, test_set='test', current=True):
         """
