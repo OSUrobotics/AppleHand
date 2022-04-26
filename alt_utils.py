@@ -29,12 +29,10 @@ class RNNDataset(Dataset):
         self.batch_size = batch_size
         self.change_success_rate = False
         self.episodes = []
-        for state, label, name in zip(state_list, label_list, episode_names):
-            self.episodes.append({'state': torch.tensor(state), 'label': torch.tensor(label), 'name': name})
-        self.time_getting_eps = 0
-        self.eps = 0
+        self.state_lens = [len(state) for state in state_list]
+#        print('longests state is ', max(state_lens), 'len of state list is ', len(state_lens))
         try:
-            if not range_params:
+            if range_params == False:
                 print('WE ARENT NORMALIZING YOU DUMMY')
                 self.state_list = state_list.copy()
                 self.range_params = None
@@ -50,12 +48,24 @@ class RNNDataset(Dataset):
             print('Database is None, not scaling it and building a dummy dataset')
             self.shape = (0, 0, 0)
             self.state_list = state_list
+        padded_state_list = np.zeros((len(state_list),max(self.state_lens),len(state_list[0][0])))
+        padded_labels = np.ones((len(state_list),max(self.state_lens))) * 2
+        for i, x_len in enumerate(self.state_lens):
+            sequence = self.state_list[i]
+            label_sequence = label_list[i]
+            padded_state_list[i, 0:x_len] = sequence[:x_len]
+            padded_labels[i, 0:x_len] = label_sequence[:x_len]
+        for state, label, name, unpacked_len in zip(padded_state_list, padded_labels, episode_names,self.state_lens):
+#            print(np.shape(state))
+            self.episodes.append({'state': torch.tensor(state), 'label': torch.tensor(label), 'name': name, 'length': unpacked_len})
+        self.time_getting_eps = 0
+        self.eps = 0
 
     def get_params(self):
         return self.range_params
 
     def __getitem__(self, index):
-        return self.episodes[index]['state'], self.episodes[index]['label'], len(self.episodes[index]['state']), self.episodes[index]['name']
+        return self.episodes[index]['state'], self.episodes[index]['label'], self.episodes[index]['length'], self.episodes[index]['name']
 
     def __len__(self):
         return len(self.state_list)

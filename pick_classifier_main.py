@@ -103,6 +103,7 @@ class ExperimentHandler:
         if validate:
             params = np.load('proxy_mins_and_maxs.npy', allow_pickle=True)
             params = params.item()
+            print('validation params',params)
             if self.args.used_features is None:
                 self.validation_dataset = RNNDataset(self.validation_data['test_state'],
                                                      self.validation_data['test_label'],
@@ -123,6 +124,7 @@ class ExperimentHandler:
                 self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'],
                                                 self.test_data['train_pick_title'], self.args.batch_size, range_params=params)
                 params = self.train_dataset.get_params()
+                print('params from train dataset',params)
                 print('second dataset')
                 self.test_dataset = RNNDataset(self.test_data['test_state'], self.test_data['test_label'],
                                                self.test_data['test_pick_title'], self.args.batch_size, range_params=params)
@@ -202,6 +204,7 @@ class ExperimentHandler:
                                              validation_dataset=self.validation_dataset)
             except AttributeError:
                 classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
+#            input('stahp')
             classifier.train()
             print('model finished, saving now')
             classifier.save_data()

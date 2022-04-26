@@ -25,7 +25,7 @@ class GraspProcessor():
 
         self.top_level = ['training_set', 'test_set']
 #        self.mid_level = 'pp4_folders_labeled'
-        self.mid_level = 'new_pp4_folders_labeled'
+        self.mid_level = 'new_pp5_labeled'
         self.bot_level = ['successful', 'failed', 'could_be_success']
         self.data_labels = {'Arm Force': [0, 1, 2],
                             'Arm Torque': [3, 4, 5],
@@ -41,8 +41,12 @@ class GraspProcessor():
         self.process_data_pick(path + '/PICK', validate)
         if validate:
             combined_data = self.validation_grasp_data.copy()
-            combined_data['test_state'] = np.append(self.validation_grasp_data['test_state'],self.validation_pick_data['test_state'], axis=1)
-            combined_data['test_label'] = np.append(self.validation_grasp_data['test_label'],self.validation_pick_data['test_label'], axis=1)
+            for i in range(len(combined_data['test_state'])):
+                combined_data['test_state'][i].extend(self.validation_pick_data['test_state'][i])
+                combined_data['test_label'][i].extend(self.validation_pick_data['test_label'][i])
+                if combined_data['test_pick_title'][i] != self.validation_pick_data['test_pick_title'][i]:
+                    print('WE ARE FUCKED')
+                    print(combined_data['test_pick_title'][i],self.validation_pick_data['test_pick_title'][i])
             with open('combined_validation_dataset.pkl', 'wb') as file:
                 pkl.dump(combined_data, file)
                 file.close()
@@ -70,7 +74,7 @@ class GraspProcessor():
                 print()
                 print('all files saved')
                 self.test_combined_data = combined_data
-        self.save_csv('gim')
+#        self.save_csv('gim')
 
     def process_data_pick(self, path, validate=False):
         """
@@ -251,7 +255,7 @@ class GraspProcessor():
         file.close()
         print()
         print('all files saved')
-        self.save_csv('gim')
+#        self.save_csv('gim')
 
     def save_csv(self, filename, dataset_name=None):
         
