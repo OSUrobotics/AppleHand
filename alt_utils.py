@@ -63,7 +63,7 @@ class RNNDataset(IterableDataset):
         :return: shuffled states, labels, lengths of episodes, and names of episodes
         """
         if self.change_success_rate:
-            
+
             shuffled_state = [temp['state'] for temp in self.episodes]
             shuffled_label = [temp['label'] for temp in self.episodes]
             shuffled_name = [temp['name'] for temp in self.episodes]
