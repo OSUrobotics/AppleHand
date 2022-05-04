@@ -108,15 +108,22 @@ class AppleClassifier:
             self.validation_data = DataLoader(validation_dataset, shuffle=False,
                                               batch_size=param_dict['batch_size'])
             self.validation_size = validation_dataset.shape
-            self.validation_accuracies = []
+            self.validation_acc = []
+            self.validation_AUC = []
+            self.group_val_acc = []
+            self.group_val_AUC = []
         else:
             self.validation_data = None
             self.validation_size = None
-            self.validation_accuracies = []
+            self.validation_acc = []
+            self.validation_AUC = []
+            self.group_val_acc = []
+            self.group_val_AUC = []
         self.train_accuracies = []
         self.accuracies = []
-        self.TP_rate = []
-        self.FP_rate = []
+        self.group_acc = []
+        self.group_AUC = []
+        self.AUC = []
         self.losses = []
         self.steps = []
         self.visualization_range = [0, 1000]
@@ -145,8 +152,7 @@ class AppleClassifier:
         self.identifier = self.outputs
         self.generate_ID()
         self.label_times = []
-        self.group_acc = []
-        self.group_val_acc = []
+        print('size of parameters = ', self.count_parameters())
 
     def count_parameters(self):
         """
@@ -187,7 +193,7 @@ class AppleClassifier:
         self.steps = temp_dict['steps']
         self.train_accuracies = temp_dict['train_acc']
         try:
-            self.validation_accuracies = temp_dict['validation_acc']
+            self.validation_acc = temp_dict['validation_acc']
         except KeyError:
             pass
 
@@ -195,10 +201,10 @@ class AppleClassifier:
         """
         function to generate dict of performance during training for saving
         """
-        classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
-                           'steps': self.steps, 'TP': self.TP_rate,
-                           'FP': self.FP_rate, 'ID': self.identifier,
-                           'train_acc': self.train_accuracies, 'validation_acc': self.validation_accuracies}
+        classifier_dict = {'steps': self.steps, 'loss': self.losses,
+                            'acc': self.accuracies, 'AUC': self.AUC,
+                           'validation_acc': self.validation_acc, 'validation_AUC': self.validation_AUC,
+                           'ID': self.identifier}
         return classifier_dict.copy()
 
     def get_best_performance(self, ind_range):
@@ -209,15 +215,10 @@ class AppleClassifier:
         if (ind_range[0] >= 0) and (ind_range[1] < 0):
             ind_range[1] = len(self.accuracies) + ind_range[1]
         max_acc_ind = [np.argmax(a) for a in self.accuracies[ind_range[0]:ind_range[1]]]
-        max_acc_train = [max(a) for a in self.train_accuracies[ind_range[0]:ind_range[1]]]
         max_acc = []
-        best_FP = []
-        best_TP = []
         for i in range(ind_range[1] - ind_range[0]):
             max_acc.append(self.accuracies[ind_range[0] + i][max_acc_ind[i]])
-            best_FP.append(self.FP_rate[ind_range[0] + i][max_acc_ind[i]])
-            best_TP.append(self.TP_rate[ind_range[0] + i][max_acc_ind[i]])
-        return max_acc, best_TP, best_FP, max_acc_train
+        return max_acc
 
     def generate_ID(self):
         """
@@ -245,17 +246,21 @@ class AppleClassifier:
         optim = torch.optim.Adam(self.model.parameters(), lr=0.001)
         self.model.train()
         print('starting training, finding the starting accuracy for random model of type', self.outputs)
-        acc, TP, FP, AUC = self.evaluate(0.5)
+        accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #        train_acc, _, _, _ = self.evaluate(0.5, 'train') # currently we can't do train acc because the sampler fucks with the way we do eval
+#        self.train_accuracies.append(train_acc) # until there is a need for it, i won't be fixing it
+
         if self.validation_data is not None:
-                validation_acc, validation_tp, validation_fp, validation_AUC = self.evaluate(0.5, 'validation')
-                self.validation_accuracies.append(validation_acc)
-        best_ind = np.argmax(acc)
-        print(f'starting: accuracy - {acc[best_ind]}, TP rate - {TP[best_ind]}, FP rate - {FP[best_ind]}')
-        self.accuracies.append(acc)
-#        self.train_accuracies.append(train_acc)
-        self.TP_rate.append(TP)
-        self.FP_rate.append(FP)
+                validation_accs, validation_AUC, validation_group_acc, validation_group_AUC = self.evaluate(0.5, 'validation')
+                self.validation_acc.append(validation_accs)
+                self.group_val_acc.append(validation_group_acc)
+                self.validation_AUC.append(validation_AUC)
+                self.group_val_AUC.append(validation_group_AUC)
+        print(f'starting: AUC - {AUC}')
+        self.accuracies.append(accs)
+        self.AUC.append(AUC)
+        self.group_acc.append(group_acc)
+        self.group_AUC.append(group_acc)
         self.losses.append(0)
         self.steps.append(0)
         backup_AUC = AUC
@@ -289,32 +294,36 @@ class AppleClassifier:
                     step += 1
             t1 = time.time()
             print(f'epoch {epoch} finished')
-            acc, TP, FP, AUC = self.evaluate(0.5)
+            accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
             if self.validation_data is not None:
-                validation_acc, validation_tp, validation_fp, validation_AUC = self.evaluate(0.5, 'validation')
-                self.validation_accuracies.append(validation_acc)
+                validation_accs, validation_AUC, validation_group_acc, validation_group_AUC = self.evaluate(0.5, 'validation')
+                self.validation_acc.append(validation_accs)
+                self.group_val_acc.append(validation_group_acc)
+                self.validation_AUC.append(validation_AUC)
+                self.group_val_AUC.append(validation_group_AUC)
                 if validation_AUC > val_AUC:
                     self.val_model = copy.deepcopy(self.model)
                     val_AUC = validation_AUC
             if epoch % eval_period == 0:
-                max_acc, best_TP, best_FP, max_acc_train = self.get_best_performance([epoch - eval_period, epoch])
+                max_acc = self.get_best_performance([epoch - eval_period, epoch])
                 best_epoch = np.argmax(max_acc)
                 print(
-                    f'epoch {epoch}: test accuracy  - {max_acc[best_epoch]}, loss - {sum(self.losses[epoch - eval_period:epoch])}, TP rate - {best_TP[best_epoch]}, FP rate - {best_FP[best_epoch]}')
+                    f'epoch {epoch}: best test accuracy  - {max_acc[best_epoch]}, net loss - {sum(self.losses[epoch - eval_period:epoch])}, Best AUC - {max(self.AUC[epoch - eval_period:epoch])}')
 #                print(f'epoch {epoch}: train accuracy - {max(max_acc_train)}')
                 if self.validation_data is not None:
                     print(
-                        f'epoch {epoch}: validation accuracy - {max([max(temp) for temp in self.validation_accuracies[epoch - eval_period:epoch]])}')
+                        f'epoch {epoch}: validation accuracy - {max([max(temp) for temp in self.validation_acc[epoch - eval_period:epoch]])} validation AUC - {max(self.validation_AUC[epoch - eval_period:epoch])}')
             if AUC > backup_AUC:
                 self.best_model = copy.deepcopy(self.model)
                 backup_AUC = AUC
             t2 = time.time()
-            self.accuracies.append(acc)
+            self.accuracies.append(accs)
+            self.AUC.append(AUC)
+            self.group_acc.append(group_acc)
+            self.group_AUC.append(group_acc)
             self.losses.append(net_loss)
             self.steps.append(epoch)
-            self.TP_rate.append(TP)
-            self.FP_rate.append(FP)
 #            self.train_accuracies.append(train_acc)
             net_loss = 0
         print(f'Finished training, best recorded model had AUC = {backup_AUC}')
@@ -336,7 +345,7 @@ class AppleClassifier:
         grade_dict = {'pick_names': unique_names, 'group_decision': group_grades}
         return grade_dict
 
-    def evaluate(self, threshold=0.5, test_set='test', current=True):
+    def evaluate(self, threshold=0.5, test_set='test', current=True, ROC=False):
         """
         function to evaluate model performance
         @param threshold - determines threshold for classifying a pick as a success or failure
@@ -414,11 +423,7 @@ class AppleClassifier:
             FP, TP, thresholds = metrics.roc_curve(last_ind_label, last_ind_output)
             acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
             AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
-            if test_set == 'test':
-                self.group_acc.append(max(acc_group))
-            else:
-                self.group_val_acc.append(max(acc_group))
-            
+
         elif self.eval_type == 'pick':
             # If (Eval num) points in a row are the same classification, classify the pick as that, otherwise keep going
             eval_num = 5
@@ -450,8 +455,10 @@ class AppleClassifier:
             acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
             AUC = metrics.roc_auc_score(test_labels, outputs)
         model_to_test.train()
-
-        return acc, TP, FP, AUC
+        if ROC:
+            return TP, FP, TP_group, FP_group, acc, acc_group
+        else:
+            return acc, AUC, acc_group, AUC_group
 
     def evaluate_episode(self):
         """
@@ -494,17 +501,9 @@ class AppleClassifier:
         if filename is None:
             filename = './generated_data/' + self.identifier + \
                        datetime.datetime.now().strftime("%m_%d_%y_%H%M")
-        classifier_dict = {'acc': self.accuracies, 'loss': self.losses,
-                           'steps': self.steps, 'TP': self.TP_rate,
-                           'FP': self.FP_rate, 'ID': self.identifier,
-                           'train_acc': self.train_accuracies, 'validation_acc': self.validation_accuracies}
+
+        classifier_dict = self.get_data_dict()
         file = open(filename + '.pkl', 'wb')
         pkl.dump(classifier_dict, file)
-        file.close()
-
-        filename2 = './generated_data/' + self.identifier + datetime.datetime.now().strftime("%m_%d_%y_%H%M") + '_group_stats'
-        group_dict = {'group acc': self.group_acc, 'group validation acc': self.group_val_acc}
-        file = open(filename2 + '.pkl', 'wb')
-        pkl.dump(group_dict, file)
         file.close()
         

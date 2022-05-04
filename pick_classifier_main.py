@@ -108,7 +108,7 @@ class ExperimentHandler:
                 self.validation_dataset = RNNDataset(self.validation_data['test_state'],
                                                      self.validation_data['test_label'],
                                                      self.validation_data['test_pick_title'], self.args.batch_size,
-                                                     range_params=params)
+                                                     range_params=False)
             else:
                 used_labels = []
                 for label in self.args.used_features:
@@ -116,18 +116,18 @@ class ExperimentHandler:
                 self.validation_dataset = RNNDataset(
                     list(np.array(self.validation_data['test_state'])[:, :, used_labels]),
                     self.validation_data['test_label'], self.validation_data['test_pick_title'], self.args.batch_size,
-                    range_params=params)
+                    range_params=False)
         else:
             print('building dataset')
             if self.args.used_features is None:
                 print('first dataset')
                 self.train_dataset = RNNDataset(self.test_data['train_state'], self.test_data['train_label'],
-                                                self.test_data['train_pick_title'], self.args.batch_size, range_params=params)
+                                                self.test_data['train_pick_title'], self.args.batch_size, range_params=False)
                 params = self.train_dataset.get_params()
                 print('params from train dataset',params)
                 print('second dataset')
                 self.test_dataset = RNNDataset(self.test_data['test_state'], self.test_data['test_label'],
-                                               self.test_data['test_pick_title'], self.args.batch_size, range_params=params)
+                                               self.test_data['test_pick_title'], self.args.batch_size, range_params=False)
                 np.save('proxy_mins_and_maxs', params)
             else:
                 used_labels = []
@@ -144,10 +144,10 @@ class ExperimentHandler:
                         test_state_data[episode][tstep] = [test_state_data[episode][tstep][used_label] for used_label in
                                                            used_labels]
                 self.train_dataset = RNNDataset(train_state_data, self.test_data['train_label'],
-                                                self.test_data['pick_title'], self.args.batch_size, range_params=params)
+                                                self.test_data['pick_title'], self.args.batch_size, range_params=False)
                 params = self.train_dataset.get_params()
                 self.test_dataset = RNNDataset(test_state_data, self.test_data['test_label'],
-                                               self.test_data['pick_title'], self.args.batch_size, range_params=params)
+                                               self.test_data['pick_title'], self.args.batch_size, range_params=False)
             np.save('proxy_mins_and_maxs', params)
 
     def setup_args(self, args=None):
@@ -175,7 +175,7 @@ class ExperimentHandler:
         parser.add_argument("--plot_ROC", default=False, type=bool)  # flag to determine if we want to plot an ROC
         parser.add_argument("--check_RF", default=False,
                             type=bool)  # flag to determine if we want to compare LSTM to RF on an ROC curve
-        parser.add_argument("--plot_TP_FP", default=False,
+        parser.add_argument("--plot_AUC", default=False,
                             type=bool)  # flag to determine if we want to plot the TP and FP over epochs
         parser.add_argument("--plot_example", default=False,
                             type=bool)  # flag to determine if we want to plot an episode and the networks performance
@@ -215,7 +215,7 @@ class ExperimentHandler:
             classifier.load_model_data(self.args.policy)
         self.classifiers.append(classifier)
         self.data_dict.append(classifier.get_data_dict())
-        print(self.data_dict[0])
+        # print(self.data_dict[0])
         if self.args.compare_policy:
             old_classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
             old_classifier.load_model(self.args.policy)
@@ -233,8 +233,8 @@ class ExperimentHandler:
             self.plot_loss()
 
         # Plot TP and FP rate over time if desired
-        if self.args.plot_TP_FP:
-            self.plot_TP_FP()
+        if self.args.plot_AUC:
+            self.plot_AUC()
 
         # Train a random forset on the last datapoint in the series if desired
         if self.args.check_RF:
@@ -293,21 +293,24 @@ class ExperimentHandler:
         plt.title('Loss Curve')
         self.figure_count += 1
 
-    def plot_TP_FP(self):
+    def plot_AUC(self):
+        print('Plotting classifier AUC over time')
         legend = []
-        print('Plotting true positive and false positive rate over time')
-        TPFP_plot = plt.figure(self.figure_count)
-        for policy in self.classifiers:
-            _, best_TP, best_FP, _ = policy.get_best_performance([0, -1])
-            ID = policy.identifier
-            plt.plot(range(len(best_TP)), best_TP)
-            plt.plot(range(len(best_FP)), best_FP)
-            legend.append('TP_' + ID)
-            legend.append('FP_' + ID)
+        AUC_plot = plt.figure(self.figure_count)
+        for data in self.data_dict:
+            plt.plot(data['steps'], data['AUC'])
+            try:
+                plt.plot(data['steps'],data['validation_AUC'])
+            except:
+                print('no validation acc')
+                pass
+            legend.append(data['ID'] + ' AUC')
+            #            legend.append(data['ID'] + ' training accuracy')
+            legend.append(data['ID'] + ' validation AUC')
         plt.legend(legend)
         plt.xlabel('Steps')
-        plt.ylabel('True and False Positive Rate')
-        plt.title('True and False Positive Rate')
+        plt.ylabel('AUC')
+        plt.title('AUC Curve')
         self.figure_count += 1
 
     def plot_ROC(self):
@@ -397,14 +400,18 @@ class ExperimentHandler:
         for policy in self.classifiers:
             policy.load_dataset(self.train_dataset, self.validation_dataset)
             try:
-                acc, TP, FP, AUC = policy.evaluate(threshold=0.5, current=flag, test_set='validation')
+                TP, FP, TP_group, FP_group, acc, acc_group = policy.evaluate(threshold=0.5, current=flag, test_set='validation', ROC=True)
             except RuntimeError:
-                acc, TP, FP, ACU = policy.evaluate(threshold=0.5, current=True, test_set='validation')
+                TP, FP, TP_group, FP_group, acc, acc_group = policy.evaluate(threshold=0.5, current=True, test_set='validation', ROC=True)
             plt.plot(FP, TP)
-            legend.append(policy.identifier)
+            # plt.plot(FP_group, TP_group)
+            legend.append('policy')
+            # legend.append('grouped policy')
             count += 1
             best_thold = np.argmax(acc)
             print('best validation accuracy is ', acc[best_thold], TP[best_thold], FP[best_thold])
+            best_group_thold = np.argmax(acc_group)
+            print('best grouped validation accuracy is ', acc_group[best_group_thold], TP_group[best_group_thold], FP_group[best_group_thold])
         baseline = [0, 1]
         legend.append('Random Baseline')
         plt.plot(baseline, baseline, linestyle='--')
