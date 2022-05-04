@@ -31,6 +31,8 @@ class AppleClassifier:
         """
 
         self.eval_type = 'last'
+        
+        # set hyperparameters based on parameter dict
         try:
             self.epochs = param_dict['epochs']
         except KeyError:
@@ -60,37 +62,15 @@ class AppleClassifier:
             self.outputs = param_dict['outputs']
         except KeyError:
             self.outputs = "grasp"
-
-        if self.outputs == 'grasp':
-            self.output_dim = 1
-            self.loss_fn = nn.MSELoss()
-            self.network_type = 1
-        elif self.outputs == 'slip':
-            self.output_dim = 1
-            self.loss_fn = nn.MSELoss()
-            self.network_type = 1
-        elif self.outputs == 'contact':
-            self.output_dim = 6
-            self.loss_fn = nn.MSELoss()
-            self.network_type = 2
-        elif self.outputs == 'drop':
-            self.output_dim = 1
-            self.loss_fn = nn.MSELoss()
-            self.network_type = 1
-
-        self.batch_size = param_dict['batch_size']
-        simple_test_sampler = SequentialSampler(test_dataset)
-#        num_pos = 0
-#        num_neg = 0
-#        for state, label, lens, names in validation_dataset:
-#            if label[-1] == 0:
-#                num_neg += 1
-#            elif label[-1] == 1:
-#                num_pos += 1
-#            else:
-#                print('yo wtf?')
-#        print('perecnt we should use is ', num_pos/(num_pos+num_neg))
         try:
+            self.batch_size = param_dict['batch_size']
+        except KeyError:
+            self.batch_size = 1
+        
+        self.output_dim = 1
+        # set s/f sampling probability
+        try:
+            print('setting s/f balance to', param_dict['s_f_bal'])
             num_pos = 0
             num_neg = 0
             for state, label, lens, names in train_dataset:
@@ -101,7 +81,6 @@ class AppleClassifier:
                 else:
                     print('error! episode neither success or failure. setting weight to 0.5')
                     print(min(label))
-                    
             pos_ratio = 0.5
             neg_ratio = (1-param_dict['s_f_bal'])*num_pos*pos_ratio/(num_neg*param_dict['s_f_bal'])
         except TypeError:
@@ -119,16 +98,17 @@ class AppleClassifier:
                 print(min(label))
                 s_f_bal.append(0.5)
         self.data_sampler = WeightedRandomSampler(s_f_bal, param_dict['batch_size'], replacement=False)
+        
         self.train_data = DataLoader(train_dataset, shuffle=False,
                                      batch_size=param_dict['batch_size'], sampler=self.data_sampler)
         self.test_data = DataLoader(test_dataset, shuffle=False,
                                         batch_size=param_dict['batch_size'])
+        
         if validation_dataset is not None:
             self.validation_data = DataLoader(validation_dataset, shuffle=False,
                                               batch_size=param_dict['batch_size'])
             self.validation_size = validation_dataset.shape
             self.validation_accuracies = []
-            print('validation size', self.validation_size)
         else:
             self.validation_data = None
             self.validation_size = None
@@ -140,6 +120,7 @@ class AppleClassifier:
         self.losses = []
         self.steps = []
         self.visualization_range = [0, 1000]
+
         # Instantiate the model
         if model is not None:
             self.model = []
@@ -161,12 +142,9 @@ class AppleClassifier:
         self.plot_ind = 0
         self.test_size = test_dataset.shape
         self.train_size = train_dataset.shape
-        print('test and train size ', self.test_size, self.train_size)
         self.identifier = self.outputs
         self.generate_ID()
         self.label_times = []
-        print('input size: ', self.input_dim)
-        print('number of weights in model ', self.count_parameters())
         self.group_acc = []
         self.group_val_acc = []
 
@@ -261,7 +239,7 @@ class AppleClassifier:
         function to train model and save performance every epoch
         """
         # eval_period controls how frequently results are printed, NOT how frequently they get recorded
-        eval_period = 10
+        eval_period = 2
         if torch.cuda.is_available():
             self.model.cuda()
         optim = torch.optim.Adam(self.model.parameters(), lr=0.001)
@@ -288,39 +266,29 @@ class AppleClassifier:
             epoch_loss = 0
             step = 0
             t0 = time.time()
-#            print('training size', self.train_size[0])
             for _ in range(int(self.train_size[0]/self.batch_size)):
                 for x, label, lens, names in self.train_data:
-#                    print(x.shape)
                     hiddens = self.model.init_hidden(self.batch_size)
                     if self.model_type == "GRU":
                         hiddens = hiddens.data
                     else:
                         hiddens = tuple([e.data for e in hiddens])
                     pred, hiddens = self.model(x.to(self.device).float(), hiddens, lens)
-#                    print(pred.shape)
-#                    print(label)
-#                    input(pred)
                     for param in self.model.parameters():
                         if torch.isnan(param).any():
                             print('shit went sideways')
-                    if self.network_type == 1:
-                        if self.eval_type == 'last':
-                            loss = self.loss_fn(pred, label.to(self.device).float())
-                        else:
-                            loss = self.loss_fn(pred, label.to(self.device).float())
+                    if self.eval_type == 'last':
+                        loss = self.loss_fn(pred, label.to(self.device).float())
                     else:
-                        loss = self.loss_fn(pred.to('cpu'), label.to('cpu').float())
+                        loss = self.loss_fn(pred, label.to(self.device).float())
                     optim.zero_grad()
                     loss.backward()
                     optim.step()
                     net_loss += float(loss)
                     epoch_loss += float(loss)
                     step += 1
-                    print(loss)
             t1 = time.time()
             print(f'epoch {epoch} finished')
-#            print('percent positive = ', counter/tot_seen)
             acc, TP, FP, AUC = self.evaluate(0.5)
 #            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
             if self.validation_data is not None:
@@ -330,7 +298,6 @@ class AppleClassifier:
                     self.val_model = copy.deepcopy(self.model)
                     val_AUC = validation_AUC
             if epoch % eval_period == 0:
-                # print('average time spend shuffling dataset ', self.train_data.print_times())
                 max_acc, best_TP, best_FP, max_acc_train = self.get_best_performance([epoch - eval_period, epoch])
                 best_epoch = np.argmax(max_acc)
                 print(
@@ -343,7 +310,6 @@ class AppleClassifier:
                 self.best_model = copy.deepcopy(self.model)
                 backup_AUC = AUC
             t2 = time.time()
-            print('times', t1-t0, t2-t1)
             self.accuracies.append(acc)
             self.losses.append(net_loss)
             self.steps.append(epoch)
@@ -361,15 +327,11 @@ class AppleClassifier:
         currently not a voting, just a summation
         '''
         unique_names = list(np.unique(name_arr))
-#        print('unique names',unique_names)
-#        print('name arr',name_arr)
         unique_names.sort()
         group_grades = np.zeros(np.shape(unique_names))
         real_grades = copy.deepcopy(grade_arr)
         real_grades[real_grades == 0] = -1
         for name, grade in zip(list(name_arr), grade_arr):
-#            print(name)
-#            print(unique_names.index(name))
             group_grades[unique_names.index(name)] += grade-0.5
         grade_dict = {'pick_names': unique_names, 'group_decision': group_grades}
         return grade_dict
@@ -381,7 +343,6 @@ class AppleClassifier:
         @param test_set - determines if we check on training, testing or validation set
         @param current - Bool, determines if we use current model or best saved model
         """
-#        print(test_set)
         test_labels = np.array([])
 
         if current:
@@ -409,24 +370,11 @@ class AppleClassifier:
         all_names = []
         flag = True
         outputs = np.array([[]])
-        # x is either [episode_length,num_sensors] or [batch_size,episode_length,num_sensors]
+        # x has shape [batch_size,episode_length,num_sensors]
         for x, y, lens, names in data:
-#            print('lens from data', lens)
-#            print(np.shape(y))
-#            print(np.shape(x))
             end_output_shape = np.shape(y)
-#            if flag:
-#                temp = np.shape(x)
-##                print(temp)
-#                if len(temp) == 2:
-#                    reshape_param = temp[0]
-#                elif len(temp) == 3:
-#                    reshape_param = temp[0]*temp[1]
             hidden_layer = model_to_test.init_hidden(self.batch_size)
             final_indexes.extend(lens.tolist())
-##            print('final indexes while we goin', final_indexes)
-#            x = torch.reshape(x, (reshape_param, 1, self.input_dim))
-#            y = torch.reshape(y, (reshape_param, last_ind))
             if self.model_type == 'LSTM':
                 hidden_layer = tuple([e.data for e in hidden_layer])
             out, hidden_layer = model_to_test(x.to(self.device).float(), hidden_layer,lens)
@@ -443,35 +391,18 @@ class AppleClassifier:
             else:
                 outputs = np.append(outputs, temp, axis=0)
                 test_labels = np.append(test_labels,y, axis=0)
-#            input(list(names[0][0]))
             all_names.extend(list(names[0][0]))
-#            print(np.shape(outputs))
-#        print(np.shape(outputs))
-#        print(np.shape(test_labels))
-#        input(final_indexes)
+
         if self.eval_type == 'last':
             # Evaluates only the last point in the sequence
-            # this is a little fucked right now since everything is padded
-#            print('final indexes before doing the for loop,', final_indexes)
-#            final_indexes = [sum(final_indexes[:i]) - 1 for i in range(1, len(final_indexes) + 1)]
-#            print(final_indexes)
-            # this only works since all examples are the same length
-#            print('final indexes after the for loop',final_indexes)
             last_ind_output = []
             last_ind_label = []
-            for test in outputs[0]:
-                print('output stuff',test)
             for i, ind in enumerate(final_indexes):
-                last_ind_output.append(outputs[i,ind-1])# = outputs[final_indexes]
-                last_ind_label.append(test_labels[i,ind-1])# = test_labels[final_indexes]
-                print('last ind stuff', test_labels[i, ind-1], outputs[i,ind-1])
+                last_ind_output.append(outputs[i,ind-1])
+                last_ind_label.append(test_labels[i,ind-1])
             num_pos = np.count_nonzero(last_ind_label)
             num_total = len(last_ind_label)
-#            print('OUTPUT', last_ind_output)
-#            print('LABEL', last_ind_label)
-#            input(all_names)
             group_grade = AppleClassifier.name_counting_sort(all_names, last_ind_output)
-#            print('ACTUAL LABEL')
             correct_group_grade = AppleClassifier.name_counting_sort(all_names, last_ind_label)
             correct_group_grade['group_decision'] = correct_group_grade['group_decision'] > 0
             assert(len(group_grade['group_decision']) == len(correct_group_grade['group_decision']))
@@ -483,35 +414,21 @@ class AppleClassifier:
             FP, TP, thresholds = metrics.roc_curve(last_ind_label, last_ind_output)
             acc = (TP * num_pos + (1 - FP) * (num_total - num_pos)) / num_total
             AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
-#            print('for this round: ')
-#            print('Group accuracy = ', max(acc_group))
-#            print('Non-group accuracy = ', max(acc))
             if test_set == 'test':
                 self.group_acc.append(max(acc_group))
             else:
                 self.group_val_acc.append(max(acc_group))
-        elif self.eval_type == 'alt_last':
-            # Evaluates only the last point in the sequence with 3 classifications, success, failure and undecided
-            # this only works since all examples are the same length
-            final_indexes = list(range(data_shape[1] - 1, len(outputs), data_shape[1]))
-            last_ind_output = outputs[final_indexes]
-            last_ind_label = test_labels[final_indexes]
-            confident_area = ((last_ind_output >= 0.75) | (last_ind_output <= 0.25))
-            temp = np.array(last_ind_label[confident_area]) - (np.array(last_ind_output[confident_area]) > 0.5)
-            acc = 1 - np.count_nonzero(temp) / len(final_indexes)
-            FP = np.count_nonzero(temp < 0) / (len(last_ind_label) - np.count_nonzero(last_ind_label))
-            TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
-            AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
+            
         elif self.eval_type == 'pick':
-            # If 5 points in a row are the same classification, classify the pick as that, otherwise keep going
-            final_indexes = [sum(final_indexes[:i]) - 1 for i in range(1, len(final_indexes) + 1)]
-            # again, this will be nasty
+            # If (Eval num) points in a row are the same classification, classify the pick as that, otherwise keep going
+            eval_num = 5
             label_data = {'classification': [], 'timestep': []}
-            for i in range(len(final_indexes) - 1):
-                for j in range(final_indexes[i], final_indexes[i + 1] - 5):
-                    timestep = final_indexes[i + 1] - final_indexes[i]
+            for i, episode in enumerate(outputs):
+                for j in range(len(episode)):
                     classification = True
-                    if all(outputs[j:j + 5] < threshold):
+                    if j > final_indexes[i]:
+                        break
+                    elif all(outputs[j:j + 5] < threshold):
                         classification = False
                         timestep = j + 5 - final_indexes[i]
                         break
@@ -524,6 +441,7 @@ class AppleClassifier:
             TP = 1 - (np.count_nonzero(temp > 0) / np.count_nonzero(last_ind_label))
             AUC = metrics.roc_auc_score(last_ind_label, last_ind_output)
             self.label_times.append(label_data)
+            
         else:
             # Check every datapoint in the sequence
             num_pos = np.count_nonzero(outputs)

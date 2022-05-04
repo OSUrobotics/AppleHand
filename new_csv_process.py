@@ -192,48 +192,48 @@ class GraspProcessor():
                                 episode_state.append(list(row[1:]))
                             else:
                                 temp = True
-                    if len(episode_state) > 0:
-                        e_len =len(episode_state)
-                        episode_state = np.array(episode_state)
-                        episode_state = episode_state.astype(float)
-                        episode_state = episode_state.tolist()
-                        if folder == 'successful':
-                            episode_label = [1] * int(e_len)
-                            labels[top_folder].append(episode_label)
-                            pcount += 1
-                        elif folder == 'failed':
-                            episode_label = [0] * int(e_len)
-                            labels[top_folder].append(episode_label)
-                            ncount += 1
-                        else:
-                            episode_label = [1] * int(e_len)
-                            labels[top_folder].append(episode_label)
-                            pcount += 1#                            print(top_folder)
-#                        input(episode_state.copy())
 #                    if len(episode_state) > 0:
-#                        e_len = len(episode_state)
+#                        e_len =len(episode_state)
 #                        episode_state = np.array(episode_state)
 #                        episode_state = episode_state.astype(float)
 #                        episode_state = episode_state.tolist()
-#                        episode_label = [0.5] * int(e_len/4)
 #                        if folder == 'successful':
-#                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
-#                            episode_label.extend(middle_label)
-#                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+#                            episode_label = [1] * int(e_len)
 #                            labels[top_folder].append(episode_label)
 #                            pcount += 1
 #                        elif folder == 'failed':
-#                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * -0.5 + 0.5
-#                            episode_label.extend(middle_label)
-#                            episode_label.extend([0] * int(e_len-int(e_len/4)-int(e_len/2)))
+#                            episode_label = [0] * int(e_len)
 #                            labels[top_folder].append(episode_label)
 #                            ncount += 1
 #                        else:
-#                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
-#                            episode_label.extend(middle_label)
-#                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+#                            episode_label = [1] * int(e_len)
 #                            labels[top_folder].append(episode_label)
-#                            print(top_folder)
+#                            pcount += 1#                            print(top_folder)
+#                        input(episode_state.copy())
+                    if len(episode_state) > 0:
+                        e_len = len(episode_state)
+                        episode_state = np.array(episode_state)
+                        episode_state = episode_state.astype(float)
+                        episode_state = episode_state.tolist()
+                        episode_label = [0.5] * int(e_len/4)
+                        if folder == 'successful':
+                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
+                            episode_label.extend(middle_label)
+                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+                            labels[top_folder].append(episode_label)
+                            pcount += 1
+                        elif folder == 'failed':
+                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * -0.5 + 0.5
+                            episode_label.extend(middle_label)
+                            episode_label.extend([0] * int(e_len-int(e_len/4)-int(e_len/2)))
+                            labels[top_folder].append(episode_label)
+                            ncount += 1
+                        else:
+                            middle_label = np.array(range(int(e_len/2))) / int(e_len/2) * 0.5 + 0.5
+                            episode_label.extend(middle_label)
+                            episode_label.extend([1] * int(e_len-int(e_len/4)-int(e_len/2)))
+                            labels[top_folder].append(episode_label)
+                            print(top_folder)
                             
                             
                         states[top_folder].append(episode_state.copy())

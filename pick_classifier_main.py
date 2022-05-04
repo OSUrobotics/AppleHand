@@ -215,7 +215,7 @@ class ExperimentHandler:
             classifier.load_model_data(self.args.policy)
         self.classifiers.append(classifier)
         self.data_dict.append(classifier.get_data_dict())
-
+        print(self.data_dict[0])
         if self.args.compare_policy:
             old_classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
             old_classifier.load_model(self.args.policy)
@@ -267,7 +267,7 @@ class ExperimentHandler:
             plt.plot(data['steps'], [max(accs) for accs in data['acc']])
 #            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
             try:
-                plt.plot(data['steps'][1:], [max(accs) for accs in data['validation_acc']])
+                plt.plot(data['steps'], [max(accs) for accs in data['validation_acc']])
             except:
                 print('no validation acc')
                 pass

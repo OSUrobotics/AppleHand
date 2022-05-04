@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import torch
-
+#import matplotlib.pyplot as plt
 
 
 class RNNDataset(Dataset):
@@ -30,7 +30,7 @@ class RNNDataset(Dataset):
         self.change_success_rate = False
         self.episodes = []
         self.state_lens = [len(state) for state in state_list]
-#        print('longests state is ', max(state_lens), 'len of state list is ', len(state_lens))
+        
         try:
             if range_params == False:
                 print('WE ARENT NORMALIZING YOU DUMMY')
@@ -48,15 +48,15 @@ class RNNDataset(Dataset):
             print('Database is None, not scaling it and building a dummy dataset')
             self.shape = (0, 0, 0)
             self.state_list = state_list
-        padded_state_list = np.zeros((len(state_list),max(self.state_lens),len(state_list[0][0])))
-        padded_labels = np.ones((len(state_list),max(self.state_lens))) * 2
+        padded_state_list = np.zeros((len(self.state_list),max(self.state_lens),len(self.state_list[0][0])))
+        padded_labels = np.ones((len(self.state_list),max(self.state_lens))) * 2
+
         for i, x_len in enumerate(self.state_lens):
             sequence = self.state_list[i]
             label_sequence = label_list[i]
             padded_state_list[i, 0:x_len] = sequence[:x_len]
             padded_labels[i, 0:x_len] = label_sequence[:x_len]
         for state, label, name, unpacked_len in zip(padded_state_list, padded_labels, episode_names,self.state_lens):
-#            print(np.shape(state))
             self.episodes.append({'state': torch.tensor(state), 'label': torch.tensor(label), 'name': name, 'length': unpacked_len})
         self.time_getting_eps = 0
         self.eps = 0
@@ -76,6 +76,7 @@ class RNNDataset(Dataset):
         scales state data using range params if given, if not finds range params and scales state data
         """
         # warning, this will be ugly because i am making it with the idea that the sublists are of arbitrary length
+#        print('not right now')
         if range_params is None:
             range_params = {'top': [], 'bot': []}
             just_datapoints = unpack_arr(unscaled_list)
@@ -87,8 +88,12 @@ class RNNDataset(Dataset):
                 for k in range(len(unscaled_list[i][j])):
                     unscaled_list[i][j][k] = (unscaled_list[i][j][k] - range_params['bot'][k]) / (
                             range_params['top'][k] - range_params['bot'][k])
+                    
         return unscaled_list, range_params
 
+    @staticmethod
+    def normalize(unscaled_list):
+        return torch.nn.functional.normalize(unscaled_list,dim=2)
 
 def unpack_arr(long_arr):
     """
