@@ -51,7 +51,7 @@ class LSTMNet(nn.Module):
         self.n_layers = n_layers
         
         # Reduce complexity of inputs to RNN
-        RNN_in = 5
+        RNN_in = input_dim#5
         self.fl = nn.Linear(input_dim, RNN_in)
         self.grasp_flag = grasp_flag
         self.lstm = nn.LSTM(RNN_in, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
@@ -59,14 +59,23 @@ class LSTMNet(nn.Module):
         self.relu = nn.ReLU()
         self.sig = nn.Sigmoid()
         
-    def forward(self, x, h):
+    def forward(self, x, h, xlen):
         self.lstm.flatten_parameters()
-        rnn_x = self.fl(x)
+        
+#        rnn_x = self.fl(x)
+        rnn_x = nn.utils.rnn.pack_padded_sequence(x, xlen, batch_first=True, enforce_sorted=False)
         out, h = self.lstm(rnn_x, h)
-        out = self.fc(self.relu(out[:,-1]))
-        out = self.sig(out)
+#        print('out right after lstm',out)
+        out, _ = nn.utils.rnn.pad_packed_sequence(out,batch_first=True)
+#        print('out shape after padding again',out.shape)
+#        input(out[:,:,-1].shape)
+#        out = self.fc(self.relu(out[:,:,-1]))
+#        
         if not self.grasp_flag:
             out = self.tanh(out)
+        else:
+            out = self.sig(out[:,:,-1])
+        
         return out, h
     
     def init_hidden(self, batch_size):
@@ -74,3 +83,16 @@ class LSTMNet(nn.Module):
         hidden = (weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device),
                   weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device))
         return hidden
+    
+    def loss(self, output, labels):
+        loss_fn = nn.MSELoss(reduction='none')
+        tag_pad_token = 2
+        mask = (labels != tag_pad_token).float()
+#        print(mask)
+#        print(labels)
+#        test = mask*labels
+#        print(test)
+#        print('test max should be 1', test.max())
+        output = output * mask[:,:output.shape[-1]]
+        full_loss = loss_fn(output,labels[:,:output.shape[-1]]).mean()
+        return full_loss

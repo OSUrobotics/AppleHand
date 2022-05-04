@@ -14,6 +14,8 @@ from utils import RNNDataset
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
+
+#TODO: make this work with the new sampler datasets
 def perform_ablation(database, args, validation=None):
     """
     Function to perform an ablation study to determine which feature is the
