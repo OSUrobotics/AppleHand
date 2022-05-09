@@ -436,22 +436,20 @@ class ExperimentHandler:
             for policy in self.classifiers:
                 x, y, outputs, e_name = policy.evaluate_episode()
                 if first_plot:
-                    plt.scatter(
-                        range(len(y)), y,
-                        c='green')
+                    plt.scatter(range(len(y[0])), y[0], c='green')
                     first_plot = False
                     legend.append(policy.identifier + ' raw output')
                     legend.append(policy.identifier + ' rounded output')
                 count += 1
                 rounded_outputs = []
-                for i in range(len(outputs)):
-                    if outputs[i] >= 0.75:
+                for i in range(len(outputs[0])):
+                    if outputs[0][i] >= 0.75:
                         rounded_outputs.append(1.05)
-                    elif outputs[i] <= 0.25:
+                    elif outputs[0][i] <= 0.25:
                         rounded_outputs.append(0.05)
                     else:
                         rounded_outputs.append(0.5)
-                plt.scatter(range(len(outputs)), outputs, marker="+")
+                plt.scatter(range(len(outputs[0])), outputs[0], marker="+")
                 plt.scatter(range(len(rounded_outputs)), rounded_outputs, marker="x")
 
             plt.legend(legend)

@@ -88,11 +88,6 @@ class LSTMNet(nn.Module):
         loss_fn = nn.MSELoss(reduction='none')
         tag_pad_token = 2
         mask = (labels != tag_pad_token).float()
-#        print(mask)
-#        print(labels)
-#        test = mask*labels
-#        print(test)
-#        print('test max should be 1', test.max())
         output = output * mask[:,:output.shape[-1]]
         full_loss = loss_fn(output,labels[:,:output.shape[-1]]).mean()
         return full_loss

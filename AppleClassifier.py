@@ -381,6 +381,8 @@ class AppleClassifier:
         outputs = np.array([[]])
         # x has shape [batch_size,episode_length,num_sensors]
         for x, y, lens, names in data:
+#            print('lens')
+#            input(lens)
             end_output_shape = np.shape(y)
             hidden_layer = model_to_test.init_hidden(self.batch_size)
             final_indexes.extend(lens.tolist())
@@ -471,18 +473,30 @@ class AppleClassifier:
         self.model.eval()
         last_ind = 1
         plot_data = list(self.test_data)[self.plot_ind]
-        x, y, name = plot_data[0], plot_data[1], plot_data[3]
+        x, y, lens, name = plot_data[0], plot_data[1], plot_data[2], plot_data[3]
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
-        x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
-        y = torch.reshape(y, (np.shape(y)[0], last_ind))
+#        print(lens)
+##        lens = torch.tensor(lens,dtype=int)
+#        print(x.shape, np.shape(x))
+##        x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
+##        y = torch.reshape(y, (np.shape(y)[0], last_ind))
+#        print(x.shape)
+#        print(y.shape)
+#        print(lens)
         if self.model_type == 'LSTM':
             hidden_layer = tuple([e.data for e in hidden_layer])
-        out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer)
+        out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer, lens)
         outputs = out.to('cpu').detach().numpy()
         self.model.train()
         normalized_feature = x[:, :, 3]
-        normalized_feature = (normalized_feature - min(normalized_feature)) / (
-                max(normalized_feature) - min(normalized_feature))
+        print(normalized_feature)
+        print(normalized_feature)
+        normalized_feature = (normalized_feature - normalized_feature.min()) / (
+                normalized_feature.max() - normalized_feature.min())
+        print(normalized_feature.shape)
+        print(y.shape)
+        print(outputs.shape)
+        self.plot_ind +=1
         return normalized_feature, y, outputs, name
 
     def save_model(self, filename=None):
