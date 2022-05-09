@@ -392,6 +392,7 @@ class AppleClassifier:
             temp = np.ones(end_output_shape) * 2
             out = out.to('cpu').detach().numpy()
             y = y.to('cpu').detach().numpy()
+            # input(y[0])
             temp[:,:start_out_shape[-1]] = out
             if flag:
                 outputs = temp.copy()
