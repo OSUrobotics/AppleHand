@@ -117,7 +117,7 @@ class GraspProcessor():
                         temp = False
                         for row in reader:
                             if temp:
-                                episode_state.append(list(row[1:]))
+                                episode_state.append(list(row))
                             else:
                                 temp = True
                     if len(episode_state) > 0:
@@ -199,7 +199,7 @@ class GraspProcessor():
                         temp = False
                         for row in reader:
                             if temp:
-                                episode_state.append(list(row[1:]))
+                                episode_state.append(list(row))
                             else:
                                 temp = True
                     if 'PICK' in path or 'GRASP' in path:

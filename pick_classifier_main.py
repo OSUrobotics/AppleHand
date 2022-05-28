@@ -84,6 +84,8 @@ class ExperimentHandler:
         self.data_dict = []
         self.figure_count = 1
 
+
+
     @staticmethod
     def make_data_name(model_name):
         ind = model_name.find('model')
@@ -195,6 +197,9 @@ class ExperimentHandler:
         self.args = args
         return args
 
+    def run_experiment_group(self):
+        pass
+
     def run_experiment(self):
         # Load policy if it exists, if not train a new one
 
@@ -249,7 +254,7 @@ class ExperimentHandler:
             self.validation()
 
         # Visualize all plots made
-        plt.show()
+#        plt.show()
 
         # Plot single example if desired
         if self.args.plot_example:

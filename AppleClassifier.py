@@ -241,9 +241,13 @@ class AppleClassifier:
         """
         # eval_period controls how frequently results are printed, NOT how frequently they get recorded
         eval_period = 2
+        print('at start of train,', next(self.model.parameters()).is_cuda)
         if torch.cuda.is_available():
             self.model.cuda()
-        optim = torch.optim.Adam(self.model.parameters(), lr=0.001)
+            print('cuda available')
+        print('at end of train,', next(self.model.parameters()).is_cuda)
+        #need to test with differnt lr
+        optim = torch.optim.Adam(self.model.parameters(), lr=0.0005)
         self.model.train()
         print('starting training, finding the starting accuracy for random model of type', self.outputs)
         accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
@@ -326,8 +330,21 @@ class AppleClassifier:
             self.steps.append(epoch)
 #            self.train_accuracies.append(train_acc)
             net_loss = 0
-        print(f'Finished training, best recorded model had AUC = {backup_AUC}')
-#        print(f'best group acc:  {max(self.group_acc)}   val acc: {max(self.group_val_acc)}')
+        temp_list = []
+        for acc_list in self.accuracies:
+            temp_list.append(np.max(acc_list))
+        acc_max = np.max(temp_list)
+        temp_list = []
+
+#        
+        print(f'Finished training, best recorded model had proxy AUC = {backup_AUC}')
+        print(f'Finished training, best recorded model had proxy ACC = {acc_max}')
+        if self.validation_data is not None:
+            for acc_list in self.validation_acc:
+                temp_list.append(np.max(acc_list))
+            val_max = np.max(temp_list)
+            print(f'Finished training, best recorded model had real AUC = {val_AUC}')
+            print(f'Finished training, best recorded model had real ACC = {val_max}')#        print(f'best group acc:  {max(self.group_acc)}   val acc: {max(self.group_val_acc)}')
         self.model = copy.deepcopy(self.best_model)
 
     @staticmethod
@@ -352,12 +369,19 @@ class AppleClassifier:
         @param test_set - determines if we check on training, testing or validation set
         @param current - Bool, determines if we use current model or best saved model
         """
+        print('at start of eval',next(self.model.parameters()).is_cuda)
         test_labels = np.array([])
-
+#        if torch.cuda.is_available():
+#            self.model.cuda()
+#            print('in eval, cuda available')
         if current:
             model_to_test = self.model
         else:
+            if torch.cuda.is_available():
+                self.best_model.cuda()
+                print('cuda available')
             model_to_test = self.best_model
+
         model_to_test.eval()
         last_ind = 1
         acc = 0
@@ -385,9 +409,11 @@ class AppleClassifier:
 #            input(lens)
             end_output_shape = np.shape(y)
             hidden_layer = model_to_test.init_hidden(self.batch_size)
+#            print(hidden_layer.device.type)
             final_indexes.extend(lens.tolist())
             if self.model_type == 'LSTM':
                 hidden_layer = tuple([e.data for e in hidden_layer])
+#            print(hidden_layer.device.type)
             out, hidden_layer = model_to_test(x.to(self.device).float(), hidden_layer,lens)
             count += 1
             start_out_shape = out.shape
@@ -476,14 +502,20 @@ class AppleClassifier:
         plot_data = list(self.test_data)[self.plot_ind]
         x, y, lens, name = plot_data[0], plot_data[1], plot_data[2], plot_data[3]
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
-#        print(lens)
+        print(lens)
 ##        lens = torch.tensor(lens,dtype=int)
-#        print(x.shape, np.shape(x))
+        print(x.shape, np.shape(x))
 ##        x = torch.reshape(x, (np.shape(x)[0], 1, self.input_dim))
 ##        y = torch.reshape(y, (np.shape(y)[0], last_ind))
-#        print(x.shape)
-#        print(y.shape)
-#        print(lens)
+        if type(lens) is not torch.Tensor:
+            lens = torch.tensor([lens],dtype=int)
+            print(lens)
+            print('was not a tensor')
+            x = x.unsqueeze(1)
+            y = y.unsqueeze(1)
+        print(x.shape)
+        print(y.shape)
+        print(lens)
         if self.model_type == 'LSTM':
             hidden_layer = tuple([e.data for e in hidden_layer])
         out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer, lens)
