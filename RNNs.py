@@ -64,6 +64,7 @@ class LSTMNet(nn.Module):
         
 #        rnn_x = self.fl(x)
         rnn_x = nn.utils.rnn.pack_padded_sequence(x, xlen, batch_first=True, enforce_sorted=False)
+#        print(self.lstm.device)
         out, h = self.lstm(rnn_x, h)
 #        print('out right after lstm',out)
         out, _ = nn.utils.rnn.pad_packed_sequence(out,batch_first=True)

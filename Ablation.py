@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import pickle as pkl
 import datetime
 from AppleClassifier import AppleClassifier
-from utils import RNNDataset
+from alt_utils import RNNDataset
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
@@ -72,10 +72,10 @@ def perform_ablation(database, args, validation=None):
     missing_names = ''
     worst_names = []
     sizes = [33]
-    full_train_loader = RNNDataset(database['train_state'], database['train_label'], database['pick_title'], args.batch_size)
-    full_test_loader = RNNDataset(database['test_state'], database['test_label'], database['pick_title'], args.batch_size)
+    full_train_loader = RNNDataset(database['train_state'], database['train_label'], database['train_pick_title'], args.batch_size)
+    full_test_loader = RNNDataset(database['test_state'], database['test_label'], database['test_pick_title'], args.batch_size)
     if validation is not None:
-        validation_loader = RNNDataset(validation['test_state'], validation['test_label'], validation['pick_title'], args.batch_size)
+        validation_loader = RNNDataset(validation['test_state'], validation['test_label'], validation['validation_pick_title'], args.batch_size)
     else:
         validation_loader = None
     performance = []
@@ -86,7 +86,6 @@ def perform_ablation(database, args, validation=None):
         roc_acc, _, _, roc_AUC = full_lstm.evaluate(0.5, 'test')
         performance = np.max(roc_acc)
         print('model finished, saving now.')
-#        print('performance: ', performance)
         full_lstm.save_data()
     best_accuracies = [np.average(performance)]
     best_acc_std_dev = [np.std(best_accuracies)]
@@ -96,6 +95,7 @@ def perform_ablation(database, args, validation=None):
         indexes = []
         acc_std_dev = []
         for name, missing_label in labels.items():
+            print('started loop with missing label ', missing_label)
             temp = np.ones(33, dtype=bool)
             temp[missing_label] = False
             try:
@@ -103,11 +103,14 @@ def perform_ablation(database, args, validation=None):
             except:
                 pass
             used_labels = full_list[temp]
-            
+            print('deep copying the database')
             train_state_data = deepcopy(database['train_state'])
+            print('deep copying the test base')
             test_state_data = deepcopy(database['test_state'])
             for episode in range(len(database['train_state'])):
                 for tstep in range(len(database['train_state'][episode])):
+#                    print(f'episode: {episode}, tstep: {tstep}, used_labels: {used_labels}')
+#                    print(len(train_state_data[episode][tstep]))
                     train_state_data[episode][tstep] = [train_state_data[episode][tstep][used_label] for used_label in used_labels]
             for episode in range(len(database['test_state'])):
                 for tstep in range(len(database['test_state'][episode])):
@@ -119,11 +122,11 @@ def perform_ablation(database, args, validation=None):
                     for tstep in range(len(validation['test_state'][episode])):
 #                        print(type(validation_dataloader[episode][tstep]),type([validation_dataloader[episode][tstep][used_label] for used_label in used_labels]))
                         validation_dataloader[episode][tstep] = [validation_dataloader[episode][tstep][used_label] for used_label in used_labels]
-                reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], validation['pick_title'], args.batch_size)
+                reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], validation['validation_pick_title'], args.batch_size)
             else:
                 reduced_validation_dataset=None
-            reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], database['pick_title'], args.batch_size)
-            reduced_test_dataset = RNNDataset(test_state_data, database['test_label'], database['pick_title'], args.batch_size)
+            reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], database['train_pick_title'], args.batch_size)
+            reduced_test_dataset = RNNDataset(test_state_data, database['test_label'], database['test_pick_title'], args.batch_size)
             
             args.input_dim = len(used_labels)
             print('using this many labels', len(used_labels))
@@ -132,11 +135,12 @@ def perform_ablation(database, args, validation=None):
                 base_lstm = AppleClassifier(reduced_train_dataset,
                                             reduced_test_dataset, vars(args),validation_dataset=reduced_validation_dataset)
                 base_lstm.train()
-                roc_max_acc = []
-                roc_acc, _, _, roc_AUC = base_lstm.evaluate(0.5,'test')
-                roc_max_acc.append(roc_acc)
+#                roc_max_acc = []
+#                roc_acc, _, _, roc_AUC = base_lstm.evaluate(0.5,'test')
+                roc_max_acc = [np.max(acc_list) for acc_list in base_lstm.accuracies]
+                roc_AUC = np.max(base_lstm.AUC)
 #                print('roc max acc: ', roc_max_acc)
-                performance.append(np.max(roc_acc))
+                performance.append(np.max(roc_max_acc))
                 print('model finished, saving now')
 #                print('performance: ', performance)
                 base_lstm.save_data()
