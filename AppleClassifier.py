@@ -326,7 +326,18 @@ class AppleClassifier:
             self.steps.append(epoch)
 #            self.train_accuracies.append(train_acc)
             net_loss = 0
-        print(f'Finished training, best recorded model had AUC = {backup_AUC}')
+        temp_list = []
+        for acc_list in self.accuracies:
+            temp_list.append(np.max(acc_list))
+        acc_max = np.max(temp_list)
+        temp_list = []
+        for acc_list in self.validation_acc:
+            temp_list.append(np.max(acc_list))
+        val_max = np.max(temp_list)
+        print(f'Finished training, best recorded model had proxy AUC = {backup_AUC}')
+        print(f'Finished training, best recorded model had proxy ACC = {acc_max}')
+        print(f'Finished training, best recorded model had real AUC = {val_AUC}')
+        print(f'Finished training, best recorded model had real ACC = {val_max}')
 #        print(f'best group acc:  {max(self.group_acc)}   val acc: {max(self.group_val_acc)}')
         self.model = copy.deepcopy(self.best_model)
 
@@ -484,6 +495,8 @@ class AppleClassifier:
 #        print(x.shape)
 #        print(y.shape)
 #        print(lens)
+        if type(lens) is not torch.Tensor:
+            lens = torch.tensor(lens,dtype=int)
         if self.model_type == 'LSTM':
             hidden_layer = tuple([e.data for e in hidden_layer])
         out, hidden_layer = self.model(x.to(self.device).float(), hidden_layer, lens)
