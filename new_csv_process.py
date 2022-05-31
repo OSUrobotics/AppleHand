@@ -53,6 +53,7 @@ class GraspProcessor():
             with open('combined_validation_dataset.pkl', 'wb') as file:
                 pkl.dump(combined_data, file)
                 file.close()
+                print('updated file combined_validation_dataset.pkl')
                 print()
                 print('all files saved')
                 self.validation_combined_data = combined_data
@@ -74,6 +75,7 @@ class GraspProcessor():
             with open('combined_train_test_dataset.pkl', 'wb') as file:
                 pkl.dump(combined_data, file)
                 file.close()
+                print('updated file combined_train_test_dataset.pkl')
                 print()
                 print('all files saved')
                 self.test_combined_data = combined_data
@@ -151,11 +153,15 @@ class GraspProcessor():
                      'train_pick_title': pick_names['training_set'], 'test_pick_title': pick_names['test_set']}
         #        input(states['training_set'])
         if validate:
-            file = open('validation_pick_dataset.pkl', 'wb')
+            fname = 'validation_pick_dataset.pkl'
+            file = open(fname, 'wb')
             self.validation_pick_data = data_file.copy()
+            print('updated file ', fname)
         else:
-            file = open('train_test_pick_dataset.pkl', 'wb')
+            fname = 'train_test_pick_dataset.pkl'
+            file = open(fname, 'wb')
             self.test_pick_data = data_file.copy()
+            print('updated file ', fname)
         pkl.dump(data_file, file)
         file.close()
         print()
@@ -258,11 +264,28 @@ class GraspProcessor():
                      'train_pick_title': pick_names['training_set'], 'test_pick_title': pick_names['test_set']}
         #        input(states['training_set'])
         if validate:
-            file = open('validation_grasp_dataset.pkl', 'wb')
-            self.validation_grasp_data = data_file.copy()
+            if 'GRASP' in path:
+                fname = 'validation_grasp_dataset.pkl'
+                file = open(fname, 'wb')
+                self.validation_grasp_data = data_file.copy()
+                print('updated file ', fname)
+            elif 'PICK' in path:
+                fname = 'validation_pick_dataset.pkl'
+                file = open(fname, 'wb')
+                self.validation_grasp_data = data_file.copy()
+                print('updated file ', fname)
         else:
-            file = open('train_test_grasp_dataset.pkl', 'wb')
-            self.test_grasp_data = data_file.copy()
+            if 'GRASP' in path:
+                fname = 'train_test_grasp_dataset.pkl'
+                file = open(fname, 'wb')
+                self.test_grasp_data = data_file.copy()
+                print('updated file ', fname)
+            elif 'PICK' in path:
+                fname = 'train_test_pick_dataset.pkl'
+                file = open(fname, 'wb')
+                self.test_grasp_data = data_file.copy()
+                print('updated file ', fname)
+
         pkl.dump(data_file, file)
         file.close()
         print()

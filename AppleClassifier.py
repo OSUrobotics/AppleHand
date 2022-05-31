@@ -17,7 +17,7 @@ import datetime
 import time
 from utils import unpack_arr
 import sklearn.metrics as metrics
-
+import csv
 
 class AppleClassifier:
     def __init__(self, train_dataset, test_dataset, param_dict, model=None, validation_dataset=None):
@@ -66,7 +66,10 @@ class AppleClassifier:
             self.batch_size = param_dict['batch_size']
         except KeyError:
             self.batch_size = 1
-        
+        try:
+            self.phase = param_dict['phase']
+        except KeyError:
+            self.phase = 'NA'
         self.output_dim = 1
         # set s/f sampling probability
         try:
@@ -152,6 +155,7 @@ class AppleClassifier:
         self.identifier = self.outputs
         self.generate_ID()
         self.label_times = []
+        self.metadata = []
         print('size of parameters = ', self.count_parameters())
 
     def count_parameters(self):
@@ -240,7 +244,7 @@ class AppleClassifier:
         function to train model and save performance every epoch
         """
         # eval_period controls how frequently results are printed, NOT how frequently they get recorded
-        eval_period = 2
+        eval_period = 10
         print('at start of train,', next(self.model.parameters()).is_cuda)
         if torch.cuda.is_available():
             self.model.cuda()
@@ -249,7 +253,7 @@ class AppleClassifier:
         #need to test with differnt lr
         optim = torch.optim.Adam(self.model.parameters(), lr=0.0005)
         self.model.train()
-        print('starting training, finding the starting accuracy for random model of type', self.outputs)
+        print('starting training, finding the starting accuracy for random model of type', self.phase)
         accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #        train_acc, _, _, _ = self.evaluate(0.5, 'train') # currently we can't do train acc because the sampler fucks with the way we do eval
 #        self.train_accuracies.append(train_acc) # until there is a need for it, i won't be fixing it
@@ -335,7 +339,8 @@ class AppleClassifier:
             temp_list.append(np.max(acc_list))
         acc_max = np.max(temp_list)
         temp_list = []
-
+        
+        self.metadata = [backup_AUC, acc_max]
         print(f'Finished training, best recorded model had proxy AUC = {backup_AUC}')
         print(f'Finished training, best recorded model had proxy ACC = {acc_max}')
         if self.validation_data is not None:
@@ -343,7 +348,8 @@ class AppleClassifier:
                 temp_list.append(np.max(acc_list))
             val_max = np.max(temp_list)
             print(f'Finished training, best recorded model had real AUC = {val_AUC}')
-            print(f'Finished training, best recorded model had real ACC = {val_max}')#        print(f'best group acc:  {max(self.group_acc)}   val acc: {max(self.group_val_acc)}')
+            print(f'Finished training, best recorded model had real ACC = {val_max}')
+            self.metadata.extend([val_AUC, val_max])
         self.model = copy.deepcopy(self.best_model)
 
     @staticmethod
@@ -368,7 +374,7 @@ class AppleClassifier:
         @param test_set - determines if we check on training, testing or validation set
         @param current - Bool, determines if we use current model or best saved model
         """
-        print('at start of eval',next(self.model.parameters()).is_cuda)
+#        print('at start of eval',next(self.model.parameters()).is_cuda)
         test_labels = np.array([])
 #        if torch.cuda.is_available():
 #            self.model.cuda()
@@ -549,3 +555,11 @@ class AppleClassifier:
         pkl.dump(classifier_dict, file)
         file.close()
         
+    def save_metadata(self):
+        filename = './test_records.csv'
+        row = [self.epochs, self.layers, self.hidden, self.batch_size, self.phase]
+        row.extend(self.metadata)
+        with open(filename,'a', newline='') as file:
+            writer = csv.writer(file, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            
+            writer.writerow(row)

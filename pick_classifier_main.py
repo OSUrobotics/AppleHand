@@ -27,8 +27,11 @@ from copy import deepcopy
 
 
 class ExperimentHandler:
-    def __init__(self):
+    def __init__(self,alt_args=None):
         self.setup_args()
+        print(self.args.phase)
+        self.modify_args(alt_args)
+        print(self.args.phase)
         self.data_processor = GraspProcessor()
         self.test_dataset = []
         self.validation_dataset = []
@@ -40,18 +43,22 @@ class ExperimentHandler:
                        'Finger Speed': [13, 22, 31],
                        'Finger Effort': [14, 23, 32]}
         if self.args.data_path is not None:
-            if self.args.pick:
+            if self.args.phase.lower() == 'full':
                 self.data_processor.process_full_test(self.args.data_path)
-            else:
+            elif self.args.phase.lower() == 'grasp':
+                self.data_processor.process_data_iterable(self.args.data_path)
+            elif self.args.phase.lower() == 'pick':
                 self.data_processor.process_data_iterable(self.args.data_path)
         if self.args.validation_path is not None:
-            if self.args.pick:
+            if self.args.phase.lower() == 'full':
                 self.data_processor.process_full_test(self.args.validation_path, validate=True)
-            else:
+            elif self.args.phase.lower() == 'grasp':
+                self.data_processor.process_data_iterable(self.args.validation_path, validate=True)
+            elif self.args.phase.lower() == 'pick':
                 self.data_processor.process_data_iterable(self.args.validation_path, validate=True)
 
-        if self.args.pick:
-            print('opening apple grasp and pick datset')
+        if self.args.phase.lower() == 'full':
+            print('opening full apple datset')
             file = open('combined_train_test_dataset.pkl', 'rb')
             self.test_data = pkl.load(file)
             self.test_data = self.make_float(self.test_data)
@@ -61,7 +68,7 @@ class ExperimentHandler:
                 self.validation_data = pkl.load(file)
                 self.validation_data = self.make_float(self.validation_data)
                 file.close()
-        else:
+        elif self.args.phase.lower() == 'grasp':
             file = open('train_test_grasp_dataset.pkl', 'rb')
             print('opening apple grasp datset')
             self.test_data = pkl.load(file)
@@ -69,6 +76,17 @@ class ExperimentHandler:
             file.close()
             if self.args.validate:
                 file = open('validation_grasp_dataset.pkl', 'rb')
+                self.validation_data = pkl.load(file)
+                self.validation_data = self.make_float(self.validation_data)
+                file.close()
+        elif self.args.phase.lower() == 'pick':
+            file = open('train_test_pick_dataset.pkl', 'rb')
+            print('opening apple pick datset')
+            self.test_data = pkl.load(file)
+            self.test_data = self.make_float(self.test_data)
+            file.close()
+            if self.args.validate:
+                file = open('validation_pick_dataset.pkl', 'rb')
                 self.validation_data = pkl.load(file)
                 self.validation_data = self.make_float(self.validation_data)
                 file.close()
@@ -84,7 +102,8 @@ class ExperimentHandler:
         self.data_dict = []
         self.figure_count = 1
 
-
+    def modify_args(self,alt_args):
+        self.args.phase = alt_args
 
     @staticmethod
     def make_data_name(model_name):
@@ -187,7 +206,7 @@ class ExperimentHandler:
         parser.add_argument("--batch_size", default=1, type=int)  # number of episodes in a batch during training
         parser.add_argument("--used_features", default=None, type=str)
         parser.add_argument("--validate", default=False, type=bool)
-        parser.add_argument("--pick", default=False, type=bool)
+        parser.add_argument("--phase", default='full', type=str)
         parser.add_argument("--validation_path", default=None, type=str)
         parser.add_argument("--s_f_bal", default=None, type=float)
 
@@ -196,9 +215,6 @@ class ExperimentHandler:
             args.used_features = args.used_features.split(',')
         self.args = args
         return args
-
-    def run_experiment_group(self):
-        pass
 
     def run_experiment(self):
         # Load policy if it exists, if not train a new one
@@ -211,6 +227,7 @@ class ExperimentHandler:
                 classifier = AppleClassifier(self.train_dataset, self.test_dataset, vars(self.args))
 #            input('stahp')
             classifier.train()
+            classifier.save_metadata()
             print('model finished, saving now')
             classifier.save_data()
             classifier.save_model()
@@ -473,5 +490,12 @@ class ExperimentHandler:
 
 if __name__ == "__main__":
     # Read in arguments from command line
-    experiments = ExperimentHandler()
-    experiments.run_experiment()
+    print('training 3 times with same params')
+    phases = ['grasp', 'pick', 'full']
+    for j in range(3):
+        print(f'starting {phases[j]} phase')
+        for i in range(3):
+            print(f'starting trial number {i}')
+            experiments = ExperimentHandler(phases[j])
+            experiments.run_experiment()
+            
