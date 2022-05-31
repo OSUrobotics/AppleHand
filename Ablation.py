@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import pickle as pkl
 import datetime
 from AppleClassifier import AppleClassifier
-from alt_utils import RNNDataset
+from utils import RNNDataset
 import matplotlib.pyplot as plt
 from copy import deepcopy
 

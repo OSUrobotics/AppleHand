@@ -6,14 +6,17 @@ Created on Sun Oct  3 16:54:09 2021
 @author: Nigel Swenson
 """
 
-from torch.utils.data import IterableDataset
+from torch.utils.data import IterableDataset, Dataset
 import random
 from itertools import chain
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import torch
+#import matplotlib.pyplot as plt
 
-class RNNDataset(IterableDataset):
+
+class RNNDataset(Dataset):
     def __init__(self, state_list, label_list, episode_names, batch_size, range_params=None):
         """
         Class to contain states and labels for recurrent neural networks made of collection of episodes
@@ -23,13 +26,13 @@ class RNNDataset(IterableDataset):
         :param batch_size: number of episodes returned in a single batch
         :param range_params: min and max for each parameter to normalize data
         """
-        self.label_list = label_list
         self.batch_size = batch_size
-        self.episode_names = episode_names
-        self.time_getting_eps = 0
-        self.eps = 0
+        self.change_success_rate = False
+        self.episodes = []
+        self.state_lens = [len(state) for state in state_list]
+        
         try:
-            if not range_params:
+            if range_params == False:
                 print('WE ARENT NORMALIZING YOU DUMMY')
                 self.state_list = state_list.copy()
                 self.range_params = None
@@ -46,58 +49,27 @@ class RNNDataset(IterableDataset):
             self.shape = (0, 0, 0)
             self.state_list = state_list
 
-    def divide_into_batches(self, state, label, names):
-        """
-        splits state, label and names into batches based on batch size
-        """
-        for i in range(0, len(state), self.batch_size):
-            yield state[i:i + self.batch_size], label[i:i + self.batch_size], names[i:i + self.batch_size]
+        padded_state_list = np.zeros((len(self.state_list),max(self.state_lens),len(self.state_list[0][0])))
+        padded_labels = np.ones((len(self.state_list),max(self.state_lens))) * 2
 
-    @property
-    def shuffled_episodes(self):
-        """
-        function to shuffle all episodes in dataset
-        :return: shuffled states, labels, lengths of episodes, and names of episodes
-        """
-        shuffled_state, shuffled_label, shuffled_name = zip(
-            *random.sample(list(zip(self.state_list, self.label_list, self.episode_names)), len(self.state_list)))
-        batched_data = list(self.divide_into_batches(shuffled_state, shuffled_label, shuffled_name))
-        shuffled_state = [np.concatenate(arr_list[0]) for arr_list in batched_data]
-        shuffled_label = [np.concatenate(arr_list[1]) for arr_list in batched_data]
-        names = [np.concatenate(arr_list[2]) for arr_list in batched_data]
-        lens = []
-        for arr_list in batched_data:
-            temp = [len(arr_list[0][i]) for i in range(len(arr_list[0]))]
-            lens.append(temp)
-        return shuffled_state, shuffled_label, lens, names
-
-    def get_episodes(self):
-        """
-        produces zip for iter function of shuffled episode data
-        """
-        t0 = time.time()
-        states, labels, lens, names = self.shuffled_episodes
-        state_iter = iter(states)
-        label_iter = iter(labels)
-        t1 = time.time()
-        self.time_getting_eps += t1-t0
-        self.eps += 1
-        if self.eps % 10 == 1:
-            self.print_times()
-            print(names[0])
-        return zip(state_iter, label_iter, lens, names)
+        for i, x_len in enumerate(self.state_lens):
+            sequence = self.state_list[i]
+            label_sequence = label_list[i]
+            padded_state_list[i, 0:x_len] = sequence[:x_len]
+            padded_labels[i, 0:x_len] = label_sequence[:x_len]
+        for state, label, name, unpacked_len in zip(padded_state_list, padded_labels, episode_names,self.state_lens):
+            self.episodes.append({'state': torch.tensor(state), 'label': torch.tensor(label), 'name': name, 'length': unpacked_len})
+        self.time_getting_eps = 0
+        self.eps = 0
 
     def get_params(self):
         return self.range_params
 
-    def __iter__(self):
-        return self.get_episodes()
+    def __getitem__(self, index):
+        return self.episodes[index]['state'], self.episodes[index]['label'], self.episodes[index]['length'], self.episodes[index]['name']
 
     def __len__(self):
         return len(self.state_list)
-
-    def print_times(self):
-        print('average time spend shuffling dataset ',self.time_getting_eps/self.eps)
 
     @staticmethod
     def scale(unscaled_list, range_params=None):
@@ -105,6 +77,7 @@ class RNNDataset(IterableDataset):
         scales state data using range params if given, if not finds range params and scales state data
         """
         # warning, this will be ugly because i am making it with the idea that the sublists are of arbitrary length
+#        print('not right now')
         if range_params is None:
             range_params = {'top': [], 'bot': []}
             just_datapoints = unpack_arr(unscaled_list)
@@ -115,9 +88,13 @@ class RNNDataset(IterableDataset):
             for j in range(len(unscaled_list[i])):
                 for k in range(len(unscaled_list[i][j])):
                     unscaled_list[i][j][k] = (unscaled_list[i][j][k] - range_params['bot'][k]) / (
-                                range_params['top'][k] - range_params['bot'][k])
+                            range_params['top'][k] - range_params['bot'][k])
+                    
         return unscaled_list, range_params
 
+    @staticmethod
+    def normalize(unscaled_list):
+        return torch.nn.functional.normalize(unscaled_list,dim=2)
 
 def unpack_arr(long_arr):
     """
