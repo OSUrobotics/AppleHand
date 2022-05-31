@@ -489,11 +489,11 @@ class ExperimentHandler:
 
 if __name__ == "__main__":
     # Read in arguments from command line
-    print('training 3 times with same params')
+    print('training 4 times with same params')
     phases = ['full','grasp', 'pick']
     for j in range(3):
         print(f'starting {phases[j]} phase')
-        for i in range(3):
+        for i in range(4):
             print(f'starting trial number {i}')
             experiments = ExperimentHandler(phases[j])
             experiments.run_experiment()
