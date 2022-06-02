@@ -17,15 +17,15 @@ import datetime
 import time
 from utils import unpack_arr
 import sklearn.metrics as metrics
-
+import csv
 
 class AppleClassifier:
-    def __init__(self, train_dataset, test_dataset, param_dict, model=None, validation_dataset=None):
+    def __init__(self, train_dataset, validation_dataset, param_dict, model=None, test_dataset=None):
         """
         A class for training, evaluating and generating plots of a classifier
         for apple pick data
         @param train_loader - RNNDataset with training data loaded
-        @param test_loader - RNNDataset with testing data loaded
+        @param validation_loader - RNNDataset with validationing data loaded
         @param param_dict - Dictionary with parameters for model, training, etc
         for detail on acceptable parameters, look at valid_parameters.txt
         """
@@ -56,8 +56,8 @@ class AppleClassifier:
         try:
             self.input_dim = param_dict['input_dim']
         except KeyError:
-            print('we are here ',test_dataset.shape[2])
-            self.input_dim = test_dataset.shape[2]
+            print('we are here ',validation_dataset.shape[2])
+            self.input_dim = validation_dataset.shape[2]
         try:
             self.outputs = param_dict['outputs']
         except KeyError:
@@ -66,7 +66,10 @@ class AppleClassifier:
             self.batch_size = param_dict['batch_size']
         except KeyError:
             self.batch_size = 1
-        
+        try:
+            self.phase = param_dict['phase']
+        except KeyError:
+            self.phase = 'NA'
         self.output_dim = 1
         # set s/f sampling probability
         try:
@@ -101,22 +104,22 @@ class AppleClassifier:
         
         self.train_data = DataLoader(train_dataset, shuffle=False,
                                      batch_size=param_dict['batch_size'], sampler=self.data_sampler)
-        self.test_data = DataLoader(test_dataset, shuffle=False,
+        self.validation_data = DataLoader(validation_dataset, shuffle=False,
                                         batch_size=param_dict['batch_size'])
         
-        if validation_dataset is not None:
-            self.validation_data = DataLoader(validation_dataset, shuffle=False,
+        if test_dataset is not None:
+            self.test_data = DataLoader(test_dataset, shuffle=False,
                                               batch_size=param_dict['batch_size'])
-            self.validation_size = validation_dataset.shape
-            self.validation_acc = []
-            self.validation_AUC = []
+            self.test_size = test_dataset.shape
+            self.test_acc = []
+            self.test_AUC = []
             self.group_val_acc = []
             self.group_val_AUC = []
         else:
-            self.validation_data = None
-            self.validation_size = None
-            self.validation_acc = []
-            self.validation_AUC = []
+            self.test_data = None
+            self.test_size = None
+            self.test_acc = []
+            self.test_AUC = []
             self.group_val_acc = []
             self.group_val_AUC = []
         self.train_accuracies = []
@@ -147,11 +150,12 @@ class AppleClassifier:
         self.best_model = copy.deepcopy(self.model)
         self.val_model = copy.deepcopy(self.model)
         self.plot_ind = 0
-        self.test_size = test_dataset.shape
+        self.validation_size = validation_dataset.shape
         self.train_size = train_dataset.shape
         self.identifier = self.outputs
         self.generate_ID()
         self.label_times = []
+        self.metadata = []
         print('size of parameters = ', self.count_parameters())
 
     def count_parameters(self):
@@ -160,16 +164,16 @@ class AppleClassifier:
         """
         return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
-    def load_dataset(self, train_data, test_data):
+    def load_dataset(self, train_data, validation_data):
         """
-        function to load train and test data
+        function to load train and validation data
         @params - must be RNNDatasets
         """
         self.train_data = DataLoader(train_data, shuffle=False,
                                      batch_size=None)
-        self.test_data = DataLoader(test_data, shuffle=False,
+        self.validation_data = DataLoader(validation_data, shuffle=False,
                                     batch_size=None)
-        self.test_size = test_data.shape
+        self.validation_size = validation_data.shape
         self.train_size = train_data.shape
 
     def load_model(self, filepath):
@@ -193,7 +197,7 @@ class AppleClassifier:
         self.steps = temp_dict['steps']
         self.train_accuracies = temp_dict['train_acc']
         try:
-            self.validation_acc = temp_dict['validation_acc']
+            self.test_acc = temp_dict['test_acc']
         except KeyError:
             pass
 
@@ -203,7 +207,7 @@ class AppleClassifier:
         """
         classifier_dict = {'steps': self.steps, 'loss': self.losses,
                             'acc': self.accuracies, 'AUC': self.AUC,
-                           'validation_acc': self.validation_acc, 'validation_AUC': self.validation_AUC,
+                           'test_acc': self.test_acc, 'test_AUC': self.test_AUC,
                            'ID': self.identifier}
         return classifier_dict.copy()
 
@@ -246,20 +250,20 @@ class AppleClassifier:
             self.model.cuda()
             print('cuda available')
         print('at end of train,', next(self.model.parameters()).is_cuda)
-        #need to test with differnt lr
+        #need to validation with differnt lr
         optim = torch.optim.Adam(self.model.parameters(), lr=0.0005)
         self.model.train()
-        print('starting training, finding the starting accuracy for random model of type', self.outputs)
+        print('starting training, finding the starting accuracy for random model of type', self.phase)
         accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #        train_acc, _, _, _ = self.evaluate(0.5, 'train') # currently we can't do train acc because the sampler fucks with the way we do eval
 #        self.train_accuracies.append(train_acc) # until there is a need for it, i won't be fixing it
 
-        if self.validation_data is not None:
-                validation_accs, validation_AUC, validation_group_acc, validation_group_AUC = self.evaluate(0.5, 'validation')
-                self.validation_acc.append(validation_accs)
-                self.group_val_acc.append(validation_group_acc)
-                self.validation_AUC.append(validation_AUC)
-                self.group_val_AUC.append(validation_group_AUC)
+        if self.test_data is not None:
+                test_accs, test_AUC, test_group_acc, test_group_AUC = self.evaluate(0.5, 'test')
+                self.test_acc.append(test_accs)
+                self.group_val_acc.append(test_group_acc)
+                self.test_AUC.append(test_AUC)
+                self.group_val_AUC.append(test_group_AUC)
         print(f'starting: AUC - {AUC}')
         self.accuracies.append(accs)
         self.AUC.append(AUC)
@@ -300,24 +304,24 @@ class AppleClassifier:
             print(f'epoch {epoch} finished')
             accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
-            if self.validation_data is not None:
-                validation_accs, validation_AUC, validation_group_acc, validation_group_AUC = self.evaluate(0.5, 'validation')
-                self.validation_acc.append(validation_accs)
-                self.group_val_acc.append(validation_group_acc)
-                self.validation_AUC.append(validation_AUC)
-                self.group_val_AUC.append(validation_group_AUC)
-                if validation_AUC > val_AUC:
+            if self.test_data is not None:
+                test_accs, test_AUC, test_group_acc, test_group_AUC = self.evaluate(0.5, 'test')
+                self.test_acc.append(test_accs)
+                self.group_val_acc.append(test_group_acc)
+                self.test_AUC.append(test_AUC)
+                self.group_val_AUC.append(test_group_AUC)
+                if test_AUC > val_AUC:
                     self.val_model = copy.deepcopy(self.model)
-                    val_AUC = validation_AUC
+                    val_AUC = test_AUC
             if epoch % eval_period == 0:
                 max_acc = self.get_best_performance([epoch - eval_period, epoch])
                 best_epoch = np.argmax(max_acc)
                 print(
-                    f'epoch {epoch}: best test accuracy  - {max_acc[best_epoch]}, net loss - {sum(self.losses[epoch - eval_period:epoch])}, Best AUC - {max(self.AUC[epoch - eval_period:epoch])}')
+                    f'epoch {epoch}: best validation accuracy  - {max_acc[best_epoch]}, net loss - {sum(self.losses[epoch - eval_period:epoch])}, Best AUC - {max(self.AUC[epoch - eval_period:epoch])}')
 #                print(f'epoch {epoch}: train accuracy - {max(max_acc_train)}')
-                if self.validation_data is not None:
+                if self.test_data is not None:
                     print(
-                        f'epoch {epoch}: validation accuracy - {max([max(temp) for temp in self.validation_acc[epoch - eval_period:epoch]])} validation AUC - {max(self.validation_AUC[epoch - eval_period:epoch])}')
+                        f'epoch {epoch}: test accuracy - {max([max(temp) for temp in self.test_acc[epoch - eval_period:epoch]])} test AUC - {max(self.test_AUC[epoch - eval_period:epoch])}')
             if AUC > backup_AUC:
                 self.best_model = copy.deepcopy(self.model)
                 backup_AUC = AUC
@@ -335,15 +339,17 @@ class AppleClassifier:
             temp_list.append(np.max(acc_list))
         acc_max = np.max(temp_list)
         temp_list = []
-
+        
+        self.metadata = [backup_AUC, acc_max]
         print(f'Finished training, best recorded model had proxy AUC = {backup_AUC}')
         print(f'Finished training, best recorded model had proxy ACC = {acc_max}')
-        if self.validation_data is not None:
-            for acc_list in self.validation_acc:
+        if self.test_data is not None:
+            for acc_list in self.test_acc:
                 temp_list.append(np.max(acc_list))
             val_max = np.max(temp_list)
             print(f'Finished training, best recorded model had real AUC = {val_AUC}')
-            print(f'Finished training, best recorded model had real ACC = {val_max}')#        print(f'best group acc:  {max(self.group_acc)}   val acc: {max(self.group_val_acc)}')
+            print(f'Finished training, best recorded model had real ACC = {val_max}')
+            self.metadata.extend([val_AUC, val_max])
         self.model = copy.deepcopy(self.best_model)
 
     @staticmethod
@@ -361,14 +367,14 @@ class AppleClassifier:
         grade_dict = {'pick_names': unique_names, 'group_decision': group_grades}
         return grade_dict
 
-    def evaluate(self, threshold=0.5, test_set='test', current=True, ROC=False):
+    def evaluate(self, threshold=0.5, test_set='validation', current=True, ROC=False):
         """
         function to evaluate model performance
         @param threshold - determines threshold for classifying a pick as a success or failure
-        @param test_set - determines if we check on training, testing or validation set
+        @param test_set - determines if we check on training, testing or test set
         @param current - Bool, determines if we use current model or best saved model
         """
-        print('at start of eval',next(self.model.parameters()).is_cuda)
+#        print('at start of eval',next(self.model.parameters()).is_cuda)
         test_labels = np.array([])
 #        if torch.cuda.is_available():
 #            self.model.cuda()
@@ -498,7 +504,7 @@ class AppleClassifier:
         """
         self.model.eval()
         last_ind = 1
-        plot_data = list(self.test_data)[self.plot_ind]
+        plot_data = list(self.validation_data)[self.plot_ind]
         x, y, lens, name = plot_data[0], plot_data[1], plot_data[2], plot_data[3]
         hidden_layer = self.model.init_hidden(np.shape(x)[0])
         print(lens)
@@ -549,3 +555,11 @@ class AppleClassifier:
         pkl.dump(classifier_dict, file)
         file.close()
         
+    def save_metadata(self):
+        filename = './test_records.csv'
+        row = [self.epochs, self.layers, self.hidden, self.batch_size, self.phase]
+        row.extend(self.metadata)
+        with open(filename,'a', newline='') as file:
+            writer = csv.writer(file, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            
+            writer.writerow(row)
