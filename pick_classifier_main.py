@@ -29,7 +29,8 @@ class ExperimentHandler:
     def __init__(self,alt_args=None):
         self.setup_args()
         print(self.args.phase)
-        self.modify_args(alt_args)
+        if alt_args is not None:
+            self.modify_args(alt_args)
         print(self.args.phase)
         self.data_processor = GraspProcessor()
         self.validation_dataset = []
@@ -489,12 +490,14 @@ class ExperimentHandler:
 
 if __name__ == "__main__":
     # Read in arguments from command line
-    print('training 4 times with same params')
+#    print('training 4 times with same params')
     phases = ['full','grasp', 'pick']
     for j in range(3):
         print(f'starting {phases[j]} phase')
-        for i in range(4):
+        for i in range(1):
             print(f'starting trial number {i}')
             experiments = ExperimentHandler(phases[j])
             experiments.run_experiment()
-            
+#    
+#    experiments = ExperimentHandler()
+#    experiments.run_experiment()
