@@ -71,6 +71,10 @@ class AppleClassifier:
         except KeyError:
             self.phase = 'NA'
         self.output_dim = 1
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
         # set s/f sampling probability
         try:
             print('setting s/f balance to', param_dict['s_f_bal'])
@@ -101,9 +105,10 @@ class AppleClassifier:
                 print(min(label))
                 s_f_bal.append(0.5)
         self.data_sampler = WeightedRandomSampler(s_f_bal, param_dict['batch_size'], replacement=False)
-        
+#        train_dataset.to(self.device)
         self.train_data = DataLoader(train_dataset, shuffle=False,
                                      batch_size=param_dict['batch_size'], sampler=self.data_sampler)
+#        print(self.train_data[0])
         self.validation_data = DataLoader(validation_dataset, shuffle=False,
                                         batch_size=param_dict['batch_size'])
         
@@ -143,10 +148,7 @@ class AppleClassifier:
                 self.model = LSTMNet(self.input_dim, self.hidden, self.output_dim,
                                      self.layers, self.drop_prob)
                 self.loss_fn = self.model.loss
-        if torch.cuda.is_available():
-            self.device = torch.device("cuda")
-        else:
-            self.device = torch.device("cpu")
+
         self.best_model = copy.deepcopy(self.model)
         self.val_model = copy.deepcopy(self.model)
         self.plot_ind = 0
@@ -244,7 +246,7 @@ class AppleClassifier:
         function to train model and save performance every epoch
         """
         # eval_period controls how frequently results are printed, NOT how frequently they get recorded
-        eval_period = 2
+        eval_period = 10
         print('at start of train,', next(self.model.parameters()).is_cuda)
         if torch.cuda.is_available():
             self.model.cuda()
@@ -257,7 +259,7 @@ class AppleClassifier:
         accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #        train_acc, _, _, _ = self.evaluate(0.5, 'train') # currently we can't do train acc because the sampler fucks with the way we do eval
 #        self.train_accuracies.append(train_acc) # until there is a need for it, i won't be fixing it
-
+        
         if self.test_data is not None:
                 test_accs, test_AUC, test_group_acc, test_group_AUC = self.evaluate(0.5, 'test')
                 self.test_acc.append(test_accs)
@@ -274,19 +276,22 @@ class AppleClassifier:
         backup_AUC = AUC
         net_loss = 0
         val_AUC = 0
+#        cuda_data = self.train_data.to(self.device)
         for epoch in range(1, self.epochs + 1):
-            net_loss = 0
             epoch_loss = 0
-            step = 0
-            t0 = time.time()
+#            t0 = time.time()
             for _ in range(int(self.train_size[0]/self.batch_size)):
                 for x, label, lens, names in self.train_data:
+#                    ta=time.time()
                     hiddens = self.model.init_hidden(self.batch_size)
+#                    tb=time.time()
                     if self.model_type == "GRU":
                         hiddens = hiddens.data
                     else:
                         hiddens = tuple([e.data for e in hiddens])
+#                    tc=time.time()
                     pred, hiddens = self.model(x.to(self.device).float(), hiddens, lens)
+#                    td=time.time()
                     for param in self.model.parameters():
                         if torch.isnan(param).any():
                             print('shit went sideways')
@@ -294,13 +299,13 @@ class AppleClassifier:
                         loss = self.loss_fn(pred, label.to(self.device).float())
                     else:
                         loss = self.loss_fn(pred, label.to(self.device).float())
+#                    te=time.time()
                     optim.zero_grad()
                     loss.backward()
                     optim.step()
-                    net_loss += float(loss)
+#                    tf=time.time()
                     epoch_loss += float(loss)
-                    step += 1
-            t1 = time.time()
+#            t1 = time.time()
             print(f'epoch {epoch} finished')
             accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
@@ -330,16 +335,22 @@ class AppleClassifier:
             self.AUC.append(AUC)
             self.group_acc.append(group_acc)
             self.group_AUC.append(group_acc)
-            self.losses.append(net_loss)
+            self.losses.append(epoch_loss)
             self.steps.append(epoch)
 #            self.train_accuracies.append(train_acc)
-            net_loss = 0
-        temp_list = []
+#            print('training time', t1-t0)
+#            print('eval time', t2-t1)
+#            print('hidden init time', tb-ta)
+#            print('hidden prep time', tc-tb)            
+#            print('model run time', td-tc)
+#            print('loss fn time', te-td)            
+#            print('optimizer time', tf-te)
+#            print('loss addition time', t1-tf)
+            temp_list = []
         for acc_list in self.accuracies:
             temp_list.append(np.max(acc_list))
         acc_max = np.max(temp_list)
         temp_list = []
-        
         self.metadata = [backup_AUC, acc_max]
         print(f'Finished training, best recorded model had proxy AUC = {backup_AUC}')
         print(f'Finished training, best recorded model had proxy ACC = {acc_max}')
@@ -374,11 +385,7 @@ class AppleClassifier:
         @param test_set - determines if we check on training, testing or test set
         @param current - Bool, determines if we use current model or best saved model
         """
-#        print('at start of eval',next(self.model.parameters()).is_cuda)
         test_labels = np.array([])
-#        if torch.cuda.is_available():
-#            self.model.cuda()
-#            print('in eval, cuda available')
         if current:
             model_to_test = self.model
         else:
@@ -410,22 +417,17 @@ class AppleClassifier:
         outputs = np.array([[]])
         # x has shape [batch_size,episode_length,num_sensors]
         for x, y, lens, names in data:
-#            print('lens')
-#            input(lens)
             end_output_shape = np.shape(y)
             hidden_layer = model_to_test.init_hidden(self.batch_size)
-#            print(hidden_layer.device.type)
             final_indexes.extend(lens.tolist())
             if self.model_type == 'LSTM':
                 hidden_layer = tuple([e.data for e in hidden_layer])
-#            print(hidden_layer.device.type)
             out, hidden_layer = model_to_test(x.to(self.device).float(), hidden_layer,lens)
             count += 1
             start_out_shape = out.shape
             temp = np.ones(end_output_shape) * 2
             out = out.to('cpu').detach().numpy()
             y = y.to('cpu').detach().numpy()
-            # input(y[0])
             temp[:,:start_out_shape[-1]] = out
             if flag:
                 outputs = temp.copy()

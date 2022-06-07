@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import pickle as pkl
+import time
 # from raw_csv_process import process_data
 # from simple_csv_process import simple_process_data, process_data_iterable
 from csv_process import GraspProcessor
@@ -224,13 +225,17 @@ class ExperimentHandler:
                 classifier = AppleClassifier(self.train_dataset, self.validation_dataset, vars(self.args),
                                              test_dataset=self.test_dataset)
             except AttributeError:
+                print('THERE WAS AN ATTRIBUTE ERROR!')
                 classifier = AppleClassifier(self.train_dataset, self.validation_dataset, vars(self.args))
 #            input('stahp')
-            classifier.train()
-            classifier.save_metadata()
-            print('model finished, saving now')
-            classifier.save_data()
-            classifier.save_model()
+            if self.args.ablate:
+                perform_ablation(self.validation_data, self.args, None)
+            else:
+                classifier.train()
+                classifier.save_metadata()
+                print('model finished, saving now')
+                classifier.save_data()
+                classifier.save_model()
         else:
             classifier = AppleClassifier(self.train_dataset, self.validation_dataset, vars(self.args))
             classifier.load_model(self.args.policy)
@@ -245,6 +250,7 @@ class ExperimentHandler:
             self.classifiers.append(old_classifier)
             self.data_dict.append(old_classifier.get_data_dict())
         self.figure_count = 1
+        
 
         # Plot accuracy over time if desired
         if self.args.plot_acc:
@@ -276,10 +282,6 @@ class ExperimentHandler:
         # Plot single example if desired
         if self.args.plot_example:
             self.plot_example()
-
-        # Perform ablation on feature groups if desired
-        if self.args.ablate:
-            perform_ablation(self.validation_data, self.args, None)
 
     def plot_acc(self):
         print('Plotting classifier accuracy over time')
@@ -498,16 +500,26 @@ def run_experiment_group():
     for i in num_trials:
         data_path=start_data_path+proxy
         pick=True
+
 if __name__ == "__main__":
     # Read in arguments from command line
 #    print('training 4 times with same params')
-#     phases = ['full','grasp', 'pick']
-#     for j in range(3):
-#         print(f'starting {phases[j]} phase')
-#         for i in range(1):
-#             print(f'starting trial number {i}')
-#             experiments = ExperimentHandler(phases[j])
-#             experiments.run_experiment()
-#    
+    experiments = ExperimentHandler()
+    experiments.run_experiment()
+#    phases = ['full','grasp', 'pick']
+#    print('time to do some runtime analysis')
+#    times = []
+#    for j in range(3):
+#        print(f'starting {phases[j]} phase')
+#        for i in range(1):
+#            print(f'starting trial number {i}')
+#            start = time.time()
+#            experiments = ExperimentHandler(phases[j])
+#            experiments.run_experiment()
+#            end = time.time()
+#            print('training time = ',end - start)
+#            times.append(end-start)
+#    print(times)
+#
    experiments = ExperimentHandler()
    experiments.run_experiment()

@@ -16,12 +16,12 @@ from copy import deepcopy
 
 
 #TODO: make this work with the new sampler datasets
-def perform_ablation(database, args, validation=None):
+def perform_ablation(database, args, test=None):
     """
     Function to perform an ablation study to determine which feature is the
     most important for the classification
     @param train_dataset - a TensorDataset containing the training data
-    @param test_dataset - a TensorDataset containing the testing data
+    @param validation_dataset - a TensorDataset containing the validationing data
     @param args - an argparse.Namespace containing hyperparameters for
     the classifiers
     @return - a dictionary containing the acuracy, standard deviation, number
@@ -72,18 +72,19 @@ def perform_ablation(database, args, validation=None):
     missing_names = ''
     worst_names = []
     sizes = [33]
+    print([key for key in database.keys()])
     full_train_loader = RNNDataset(database['train_state'], database['train_label'], database['train_pick_title'], args.batch_size)
-    full_test_loader = RNNDataset(database['test_state'], database['test_label'], database['test_pick_title'], args.batch_size)
-    if validation is not None:
-        validation_loader = RNNDataset(validation['test_state'], validation['test_label'], validation['validation_pick_title'], args.batch_size)
+    full_validation_loader = RNNDataset(database['validation_state'], database['validation_label'], database['validation_pick_title'], args.batch_size)
+    if test is not None:
+        test_loader = RNNDataset(test['validation_state'], test['validation_label'], test['test_pick_title'], args.batch_size)
     else:
-        validation_loader = None
+        test_loader = None
     performance = []
     for i in range(3):
-        full_lstm = AppleClassifier(full_train_loader, full_test_loader, vars(args), validation_dataset=validation_loader)
+        full_lstm = AppleClassifier(full_train_loader, full_validation_loader, vars(args), test_dataset=test_loader)
         full_lstm.train()
         roc_max_acc = []
-        roc_acc, _, _, roc_AUC = full_lstm.evaluate(0.5, 'test')
+        roc_acc, _, _, roc_AUC = full_lstm.evaluate(0.5, 'validation')
         performance = np.max(roc_acc)
         print('model finished, saving now.')
         full_lstm.save_data()
@@ -105,38 +106,38 @@ def perform_ablation(database, args, validation=None):
             used_labels = full_list[temp]
             print('deep copying the database')
             train_state_data = deepcopy(database['train_state'])
-            print('deep copying the test base')
-            test_state_data = deepcopy(database['test_state'])
+            print('deep copying the validation base')
+            validation_state_data = deepcopy(database['validation_state'])
             for episode in range(len(database['train_state'])):
                 for tstep in range(len(database['train_state'][episode])):
-#                    print(f'episode: {episode}, tstep: {tstep}, used_labels: {used_labels}')
-#                    print(len(train_state_data[episode][tstep]))
+                    print(f'episode: {episode}, tstep: {tstep}, used_labels: {used_labels}')
+                    print(len(train_state_data[episode][tstep]))
                     train_state_data[episode][tstep] = [train_state_data[episode][tstep][used_label] for used_label in used_labels]
-            for episode in range(len(database['test_state'])):
-                for tstep in range(len(database['test_state'][episode])):
-#                    print(type(test_state_data[episode][tstep]),type([test_state_data[episode][tstep][used_label] for used_label in used_labels]))
-                    test_state_data[episode][tstep] = [test_state_data[episode][tstep][used_label] for used_label in used_labels]
-            if validation is not None:
-                validation_dataloader = deepcopy(validation['test_state'])
-                for episode in range(len(validation['test_state'])):
-                    for tstep in range(len(validation['test_state'][episode])):
-#                        print(type(validation_dataloader[episode][tstep]),type([validation_dataloader[episode][tstep][used_label] for used_label in used_labels]))
-                        validation_dataloader[episode][tstep] = [validation_dataloader[episode][tstep][used_label] for used_label in used_labels]
-                reduced_validation_dataset = RNNDataset(validation_dataloader, validation['test_label'], validation['validation_pick_title'], args.batch_size)
+            for episode in range(len(database['validation_state'])):
+                for tstep in range(len(database['validation_state'][episode])):
+#                    print(type(validation_state_data[episode][tstep]),type([validation_state_data[episode][tstep][used_label] for used_label in used_labels]))
+                    validation_state_data[episode][tstep] = [validation_state_data[episode][tstep][used_label] for used_label in used_labels]
+            if test is not None:
+                test_dataloader = deepcopy(test['validation_state'])
+                for episode in range(len(test['validation_state'])):
+                    for tstep in range(len(test['validation_state'][episode])):
+#                        print(type(test_dataloader[episode][tstep]),type([test_dataloader[episode][tstep][used_label] for used_label in used_labels]))
+                        test_dataloader[episode][tstep] = [test_dataloader[episode][tstep][used_label] for used_label in used_labels]
+                reduced_test_dataset = RNNDataset(test_dataloader, test['validation_label'], test['test_pick_title'], args.batch_size)
             else:
-                reduced_validation_dataset=None
+                reduced_test_dataset=None
             reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], database['train_pick_title'], args.batch_size)
-            reduced_test_dataset = RNNDataset(test_state_data, database['test_label'], database['test_pick_title'], args.batch_size)
+            reduced_validation_dataset = RNNDataset(validation_state_data, database['validation_label'], database['validation_pick_title'], args.batch_size)
             
             args.input_dim = len(used_labels)
             print('using this many labels', len(used_labels))
             performance = []
             for i in range(3):
                 base_lstm = AppleClassifier(reduced_train_dataset,
-                                            reduced_test_dataset, vars(args),validation_dataset=reduced_validation_dataset)
+                                            reduced_validation_dataset, vars(args),test_dataset=reduced_test_dataset)
                 base_lstm.train()
 #                roc_max_acc = []
-#                roc_acc, _, _, roc_AUC = base_lstm.evaluate(0.5,'test')
+#                roc_acc, _, _, roc_AUC = base_lstm.evaluate(0.5,'validation')
                 roc_max_acc = [np.max(acc_list) for acc_list in base_lstm.accuracies]
                 roc_AUC = np.max(base_lstm.AUC)
 #                print('roc max acc: ', roc_max_acc)
@@ -152,10 +153,6 @@ def perform_ablation(database, args, validation=None):
         print('')
         print('best combination', best_one, np.max(feature_combo_accuracies), np.shape(names))
         print('')
-#        print('lets just throw the data up here')
-#        print('performance: ', performance)
-#        print('feature combo accuracies: ', feature_combo_accuracies)
-#        print('best name: ', names[best_one])
         missing_names = missing_names + names[best_one]
         missing_labels.extend(indexes[best_one])
         best_accuracies.append(feature_combo_accuracies[best_one])

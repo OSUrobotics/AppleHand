@@ -96,6 +96,12 @@ class RNNDataset(Dataset):
     def normalize(unscaled_list):
         return torch.nn.functional.normalize(unscaled_list,dim=2)
 
+    def to(self,device):
+        for ep in self.episodes:
+            ep['state'] = ep['state'].to(device)
+            ep['label'] = ep['label'].to(device)
+        print('double checking. device should be cuda')
+        print(self.episodes[0]['state'].device)
 def unpack_arr(long_arr):
     """
     Unpacks an array of shape N x M x ... into array of N*M x ...
