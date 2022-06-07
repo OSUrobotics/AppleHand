@@ -501,13 +501,13 @@ def run_experiment_group():
 if __name__ == "__main__":
     # Read in arguments from command line
 #    print('training 4 times with same params')
-    phases = ['full','grasp', 'pick']
-    for j in range(3):
-        print(f'starting {phases[j]} phase')
-        for i in range(1):
-            print(f'starting trial number {i}')
-            experiments = ExperimentHandler(phases[j])
-            experiments.run_experiment()
+#     phases = ['full','grasp', 'pick']
+#     for j in range(3):
+#         print(f'starting {phases[j]} phase')
+#         for i in range(1):
+#             print(f'starting trial number {i}')
+#             experiments = ExperimentHandler(phases[j])
+#             experiments.run_experiment()
 #    
-#    experiments = ExperimentHandler()
-#    experiments.run_experiment()
+   experiments = ExperimentHandler()
+   experiments.run_experiment()
