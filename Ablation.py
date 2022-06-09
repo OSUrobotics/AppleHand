@@ -73,10 +73,10 @@ def perform_ablation(database, args, test=None):
     worst_names = []
     sizes = [33]
     print([key for key in database.keys()])
-    full_train_loader = RNNDataset(database['train_state'], database['train_label'], database['train_pick_title'], args.batch_size)
-    full_validation_loader = RNNDataset(database['validation_state'], database['validation_label'], database['validation_pick_title'], args.batch_size)
+    full_train_loader = RNNDataset(database['train_state'], database['train_label'], database['train_pick_title'], args.batch_size, range_params=False)
+    full_validation_loader = RNNDataset(database['validation_state'], database['validation_label'], database['validation_pick_title'], args.batch_size, range_params=False)
     if test is not None:
-        test_loader = RNNDataset(test['validation_state'], test['validation_label'], test['test_pick_title'], args.batch_size)
+        test_loader = RNNDataset(test['validation_state'], test['validation_label'], test['test_pick_title'], args.batch_size, range_params=False)
     else:
         test_loader = None
     performance = []
@@ -123,11 +123,11 @@ def perform_ablation(database, args, test=None):
                     for tstep in range(len(test['validation_state'][episode])):
 #                        print(type(test_dataloader[episode][tstep]),type([test_dataloader[episode][tstep][used_label] for used_label in used_labels]))
                         test_dataloader[episode][tstep] = [test_dataloader[episode][tstep][used_label] for used_label in used_labels]
-                reduced_test_dataset = RNNDataset(test_dataloader, test['validation_label'], test['test_pick_title'], args.batch_size)
+                reduced_test_dataset = RNNDataset(test_dataloader, test['validation_label'], test['test_pick_title'], args.batch_size, range_params=False)
             else:
                 reduced_test_dataset=None
-            reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], database['train_pick_title'], args.batch_size)
-            reduced_validation_dataset = RNNDataset(validation_state_data, database['validation_label'], database['validation_pick_title'], args.batch_size)
+            reduced_train_dataset = RNNDataset(train_state_data, database['train_label'], database['train_pick_title'], args.batch_size, range_params=False)
+            reduced_validation_dataset = RNNDataset(validation_state_data, database['validation_label'], database['validation_pick_title'], args.batch_size, range_params=False)
             
             args.input_dim = len(used_labels)
             print('using this many labels', len(used_labels))

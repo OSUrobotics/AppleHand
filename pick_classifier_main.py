@@ -309,7 +309,10 @@ class ExperimentHandler:
         print('Plotting classifier loss over time')
         loss_plot = plt.figure(self.figure_count)
         for data in self.data_dict:
-            plt.plot(data['steps'][1:], data['loss'][1:])
+            try:
+                plt.plot(data['steps'][1:], data['loss'])
+            except:
+                plt.plot(data['steps'][1:], data['loss'][1:])
             legend.append(data['ID'])
         plt.legend(legend)
         plt.xlabel('Steps')
@@ -504,19 +507,23 @@ def run_experiment_group():
 if __name__ == "__main__":
     # Read in arguments from command line
 #    print('training 4 times with same params')
-    experiments = ExperimentHandler()
-    experiments.run_experiment()
-#    phases = ['full','grasp', 'pick']
-#    print('time to do some runtime analysis')
-#    times = []
-#    for j in range(3):
-#        print(f'starting {phases[j]} phase')
-#        for i in range(1):
-#            print(f'starting trial number {i}')
-#            start = time.time()
-#            experiments = ExperimentHandler(phases[j])
-#            experiments.run_experiment()
-#            end = time.time()
-#            print('training time = ',end - start)
-#            times.append(end-start)
-#    print(times)
+#    experiments = ExperimentHandler()
+#    experiments.run_experiment()
+    phases = ['full','grasp', 'pick']
+    print('time to do some runtime analysis')
+    times = []
+    for j in range(3):
+        print(f'starting {phases[j]} phase')
+        for i in range(4):
+            print(f'starting trial number {i}')
+            start = time.time()
+            experiments = ExperimentHandler(phases[j])
+            experiments.run_experiment()
+            end = time.time()
+            print('training time = ',end - start)
+            times.append(end-start)
+    print(times)
+    
+#    
+#    experiments = ExperimentHandler()
+#    experiments.run_experiment()

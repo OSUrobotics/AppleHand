@@ -271,7 +271,6 @@ class AppleClassifier:
         self.AUC.append(AUC)
         self.group_acc.append(group_acc)
         self.group_AUC.append(group_acc)
-        self.losses.append(0)
         self.steps.append(0)
         backup_AUC = AUC
         net_loss = 0

@@ -55,24 +55,24 @@ import matplotlib.pyplot as plt
 #with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data02_16_22_1626.pkl','rb') as file:
 #    ablation_both = pkl.load(file)
 
-with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data03_06_22_0631.pkl','rb') as file:
-    full_data = pkl.load(file)
-
-with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data03_09_22_1505.pkl','rb') as file:
+with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data06_08_22_2029.pkl','rb') as file:
     full_data_grasp = pkl.load(file)
+
+with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data06_08_22_1422.pkl','rb') as file:
+    full_data = pkl.load(file)
     
-with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data03_12_22_0009.pkl','rb') as file:
-    full_data_pick = pkl.load(file)
+#with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data03_12_22_0009.pkl','rb') as file:
+#    full_data_pick = pkl.load(file)
 
 #print(ablation_both)
 plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best accuracy'], full_data_grasp['std dev'], capsize=3, color=(0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='-')
-plt.errorbar(full_data_pick['num inputs'], full_data_pick['best accuracy'], full_data_pick['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
+#plt.errorbar(full_data_pick['num inputs'], full_data_pick['best accuracy'], full_data_pick['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
 plt.errorbar(full_data['num inputs'], full_data['best accuracy'], full_data['std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
-print(full_data_pick['names'])
+#print(full_data_pick['names'])
 #plt.errorbar(ablation_grasp['num inputs'], ablation_grasp['best accuracy'], ablation_grasp['std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
 #plt.errorbar(ablation_pick['num inputs'], ablation_pick['best accuracy'], ablation_pick['std dev'], capsize=3, color= (0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='--')
 #plt.errorbar(ablation_both['num inputs'], ablation_both['best accuracy'], ablation_both['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
-plt.legend(['Grasp Phase','Pick Phase', 'Both Grasp and Pick Phase'])
+plt.legend(['Grasp Phase', 'Both Grasp and Pick Phase'])
 plt.xlabel('Number of Network Inputs')
 plt.ylabel('Accuracy')
 plt.show()
