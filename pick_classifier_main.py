@@ -520,6 +520,3 @@ if __name__ == "__main__":
 #            print('training time = ',end - start)
 #            times.append(end-start)
 #    print(times)
-#
-   experiments = ExperimentHandler()
-   experiments.run_experiment()
