@@ -79,22 +79,28 @@ def perform_ablation(database, args, test=None):
         test_loader = RNNDataset(test['validation_state'], test['validation_label'], test['test_pick_title'], args.batch_size, range_params=False)
     else:
         test_loader = None
-    performance = []
+    performance = {'auc': [], 'acc': []}
     for i in range(3):
         full_lstm = AppleClassifier(full_train_loader, full_validation_loader, vars(args), test_dataset=test_loader)
         full_lstm.train()
         roc_max_acc = []
-        roc_acc, _, _, roc_AUC = full_lstm.evaluate(0.5, 'validation')
-        performance = np.max(roc_acc)
+        max_acc = full_lstm.get_best_performance(None)
+        max_auc = np.max(full_lstm.AUC)
+        performance['auc'].append(max_auc)
+        performance['acc'].append(max_acc)
         print('model finished, saving now.')
         full_lstm.save_data()
-    best_accuracies = [np.average(performance)]
-    best_acc_std_dev = [np.std(best_accuracies)]
+    best_accuracies = [np.average(performance['acc'])]
+    best_acc_std_dev = [np.std(performance['acc'])]
+    best_auc = [np.average(performance['auc'])]
+    best_auc_std_dev = [np.std(performance['auc'])]
     for phase in range(14):
         feature_combo_accuracies = []
+        feature_combo_auc = []
         names = []
         indexes = []
         acc_std_dev = []
+        auc_std_dev = []
         for name, missing_label in labels.items():
             print('started loop with missing label ', missing_label)
             temp = np.ones(33, dtype=bool)
@@ -110,18 +116,16 @@ def perform_ablation(database, args, test=None):
             validation_state_data = deepcopy(database['validation_state'])
             for episode in range(len(database['train_state'])):
                 for tstep in range(len(database['train_state'][episode])):
-                    print(f'episode: {episode}, tstep: {tstep}, used_labels: {used_labels}')
-                    print(len(train_state_data[episode][tstep]))
+#                    print(f'episode: {episode}, tstep: {tstep}, used_labels: {used_labels}')
+#                    print(len(train_state_data[episode][tstep]))
                     train_state_data[episode][tstep] = [train_state_data[episode][tstep][used_label] for used_label in used_labels]
             for episode in range(len(database['validation_state'])):
                 for tstep in range(len(database['validation_state'][episode])):
-#                    print(type(validation_state_data[episode][tstep]),type([validation_state_data[episode][tstep][used_label] for used_label in used_labels]))
                     validation_state_data[episode][tstep] = [validation_state_data[episode][tstep][used_label] for used_label in used_labels]
             if test is not None:
                 test_dataloader = deepcopy(test['validation_state'])
                 for episode in range(len(test['validation_state'])):
                     for tstep in range(len(test['validation_state'][episode])):
-#                        print(type(test_dataloader[episode][tstep]),type([test_dataloader[episode][tstep][used_label] for used_label in used_labels]))
                         test_dataloader[episode][tstep] = [test_dataloader[episode][tstep][used_label] for used_label in used_labels]
                 reduced_test_dataset = RNNDataset(test_dataloader, test['validation_label'], test['test_pick_title'], args.batch_size, range_params=False)
             else:
@@ -131,41 +135,43 @@ def perform_ablation(database, args, test=None):
             
             args.input_dim = len(used_labels)
             print('using this many labels', len(used_labels))
-            performance = []
+            performance = {'auc': [], 'acc': []}
             for i in range(3):
                 base_lstm = AppleClassifier(reduced_train_dataset,
                                             reduced_validation_dataset, vars(args),test_dataset=reduced_test_dataset)
                 base_lstm.train()
-#                roc_max_acc = []
-#                roc_acc, _, _, roc_AUC = base_lstm.evaluate(0.5,'validation')
-                roc_max_acc = [np.max(acc_list) for acc_list in base_lstm.accuracies]
-                roc_AUC = np.max(base_lstm.AUC)
-#                print('roc max acc: ', roc_max_acc)
-                performance.append(np.max(roc_max_acc))
+                max_acc = base_lstm.get_best_performance(None)
+                max_auc = np.max(base_lstm.AUC)
+                performance['auc'].append(max_auc)
+                performance['acc'].append(max_acc)
                 print('model finished, saving now')
-#                print('performance: ', performance)
                 base_lstm.save_data()
-            feature_combo_accuracies.append(np.average(performance))
-            acc_std_dev.append(np.std(performance))
+            feature_combo_accuracies.append(np.average(performance['acc']))
+            feature_combo_auc.append(np.average(performance['auc']))
+            acc_std_dev.append(np.std(performance['acc']))
+            auc_std_dev.append(np.std(performance['auc']))
             names.append(name)
             indexes.append(missing_label)
-        best_one = np.argmax(feature_combo_accuracies)
+        best_one = np.argmax(feature_combo_auc)
         print('')
-        print('best combination', best_one, np.max(feature_combo_accuracies), np.shape(names))
+        print(f'best combination was {best_one}, with AUC {np.max(feature_combo_auc)} and Acc {np.max(feature_combo_auc)} and {np.shape(names)} inputs')
         print('')
         missing_names = missing_names + names[best_one]
         missing_labels.extend(indexes[best_one])
         best_accuracies.append(feature_combo_accuracies[best_one])
         best_acc_std_dev.append(acc_std_dev[best_one])
+        best_auc.append(feature_combo_auc[best_one])
+        best_auc_std_dev.append(auc_std_dev[best_one])
         worst_names.append(names[best_one])
         sizes.append(sizes[phase] - len(labels[names[best_one]]))
         labels.pop(names[best_one])
-#        print('best accuracies: ', best_accuracies)
     print('ablation finished. best accuracies throughout were', best_accuracies)
+    print('ablation finished. best AUC throughout were', best_auc)
     print('names removed in this order', worst_names)
 
     grasp_ablation_dict = {'num inputs': sizes, 'best accuracy': best_accuracies,
-                           'std dev': best_acc_std_dev, 'names': worst_names}
+                           'accuracy std dev': best_acc_std_dev,'best auc': best_auc, 
+                           'auc std dev': best_auc_std_dev,'names': worst_names}
     file = open('./generated_data/grasp_ablation_data' + datetime.datetime.now().strftime("%m_%d_%y_%H%M")
                 + '.pkl', 'wb')
     pkl.dump(grasp_ablation_dict, file)

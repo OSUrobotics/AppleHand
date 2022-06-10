@@ -218,7 +218,9 @@ class AppleClassifier:
         function to parse ROC response from scikit.metrics into max acc and best TP/FP over a window of epochs
         @param ind_range - list containing start and end epoch to consider
         """
-        if (ind_range[0] >= 0) and (ind_range[1] < 0):
+        if ind_range is None:
+            ind_range = [0,-1]
+        elif (ind_range[0] >= 0) and (ind_range[1] < 0):
             ind_range[1] = len(self.accuracies) + ind_range[1]
         max_acc_ind = [np.argmax(a) for a in self.accuracies[ind_range[0]:ind_range[1]]]
         max_acc = []
