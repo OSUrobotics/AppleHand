@@ -280,7 +280,7 @@ class AppleClassifier:
 #        cuda_data = self.train_data.to(self.device)
         for epoch in range(1, self.epochs + 1):
             epoch_loss = 0
-#            t0 = time.time()
+            t0 = time.time()
             for _ in range(int(self.train_size[0]/self.batch_size)):
                 for x, label, lens, names in self.train_data:
 #                    ta=time.time()
@@ -306,7 +306,7 @@ class AppleClassifier:
                     optim.step()
 #                    tf=time.time()
                     epoch_loss += float(loss)
-#            t1 = time.time()
+            t1 = time.time()
             print(f'epoch {epoch} finished')
             accs, AUC, group_acc, group_AUC = self.evaluate(0.5)
 #            train_acc, train_tp, train_fp, train_AUC = self.evaluate(0.5, 'train')
@@ -339,8 +339,8 @@ class AppleClassifier:
             self.losses.append(epoch_loss)
             self.steps.append(epoch)
 #            self.train_accuracies.append(train_acc)
-#            print('training time', t1-t0)
-#            print('eval time', t2-t1)
+            print('training time', t1-t0)
+            print('eval time', t2-t1)
 #            print('hidden init time', tb-ta)
 #            print('hidden prep time', tc-tb)            
 #            print('model run time', td-tc)

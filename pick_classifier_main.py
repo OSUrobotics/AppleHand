@@ -507,8 +507,6 @@ def run_experiment_group():
 if __name__ == "__main__":
     # Read in arguments from command line
 #    print('training 4 times with same params')
-#    experiments = ExperimentHandler()
-#    experiments.run_experiment()
 #    phases = ['full','grasp', 'pick']
 #    print('time to do some runtime analysis')
 #    times = []
@@ -523,8 +521,6 @@ if __name__ == "__main__":
 #            print('training time = ',end - start)
 #            times.append(end-start)
 #    print(times)
-    
-#    
     experiments = ExperimentHandler()
     experiments.run_experiment()
 
