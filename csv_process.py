@@ -63,11 +63,6 @@ class GraspProcessor():
             for i in range(len(combined_data['validation_state'])):
                 combined_data['validation_state'][i].extend(self.validation_pick_data['validation_state'][i])
                 combined_data['validation_label'][i].extend(self.validation_pick_data['validation_label'][i])
-                print('checking things')
-                print(combined_data['validation_pick_title'][i])
-                print(self.validation_grasp_data['validation_pick_title'][i])
-                print(self.validation_pick_data['validation_pick_title'][i])
-                input('do they match?')
                 if combined_data['validation_pick_title'][i] != self.validation_pick_data['validation_pick_title'][i]:
                     print('WE ARE FUCKED')
                     print(combined_data['validation_pick_title'][i], self.validation_pick_data['validation_pick_title'][i])
@@ -172,9 +167,7 @@ class GraspProcessor():
         file.close()
         print()
         print('all files saved')
-        print('just finished a process data pick for path', path)
-        print(self.validation_grasp_data['validation_pick_title'][0])
-        print(self.validation_pick_data['validation_pick_title'][0])
+
         
     def process_data_iterable(self, path, evaluate=False):
         """
@@ -300,12 +293,7 @@ class GraspProcessor():
         file.close()
         print()
         print('all files saved')
-        print('just finished a process data iterable for path', path)
-        print(self.validation_grasp_data['validation_pick_title'][0])
-        try:
-            print(self.validation_pick_data['validation_pick_title'][0])
-        except:
-            print('self.validation_pick_data doesn\'t exist yet')
+
             #        self.save_csv('gim')
 
     def save_csv(self, filename, dataset_name=None):
