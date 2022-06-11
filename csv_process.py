@@ -63,6 +63,11 @@ class GraspProcessor():
             for i in range(len(combined_data['validation_state'])):
                 combined_data['validation_state'][i].extend(self.validation_pick_data['validation_state'][i])
                 combined_data['validation_label'][i].extend(self.validation_pick_data['validation_label'][i])
+                print('checking things')
+                print(combined_data['validation_pick_title'][i])
+                print(self.validation_grasp_data['validation_pick_title'][i])
+                print(self.validation_pick_data['validation_pick_title'][i])
+                input('do they match?')
                 if combined_data['validation_pick_title'][i] != self.validation_pick_data['validation_pick_title'][i]:
                     print('WE ARE FUCKED')
                     print(combined_data['validation_pick_title'][i], self.validation_pick_data['validation_pick_title'][i])
@@ -109,10 +114,11 @@ class GraspProcessor():
                     episode_state = []
                     print('Opening up name', real_file_name)
                     temp = data_file_name.split('_')
+#                    print(data_file_name)
                     if temp[2] == 'pick':
-                        key_thing = 'pick' + temp[3]
+                        key_thing = '_'.join(['pick', temp[3], temp[-1]])
                     else:
-                        key_thing = temp[2]
+                        key_thing = '_'.join([temp[2], temp[-1]])
                     with open(path + '/' + self.mid_level + '/' + top_folder + '/' + folder + '/' + real_file_name,
                               'r') as csv_file:
                         reader = csv.reader(csv_file)
@@ -139,10 +145,10 @@ class GraspProcessor():
                             episode_label = [1] * int(e_len)
                             labels[top_folder].append(episode_label)
                             pcount += 1  # print(top_folder)
-                        #                        input(episode_state.copy())
                         states[top_folder].append(episode_state.copy())
                         final_csv_order[top_folder][folder].append(data_file_name)
                         pick_names[top_folder].append([[key_thing]])
+
 
         if self.csv_order != final_csv_order:
             print('pick csv order issue, original csv order: ', self.csv_order, 'new order: ', final_csv_order)
@@ -166,7 +172,10 @@ class GraspProcessor():
         file.close()
         print()
         print('all files saved')
-
+        print('just finished a process data pick for path', path)
+        print(self.validation_grasp_data['validation_pick_title'][0])
+        print(self.validation_pick_data['validation_pick_title'][0])
+        
     def process_data_iterable(self, path, evaluate=False):
         """
         Reads apple picking data saved in the given path, generates labels for all picks and saves
@@ -196,9 +205,9 @@ class GraspProcessor():
                     print('Opening up name', data_file_name)
                     temp = data_file_name.split('_')
                     if temp[2] == 'pick':
-                        key_thing = 'pick' + temp[3]
+                        key_thing = '_'.join(['pick',temp[3],temp[-1]])
                     else:
-                        key_thing = temp[2]
+                        key_thing = '_'.join([temp[2], temp[-1]])
                     with open(path + '/' + self.mid_level + '/' + top_folder + '/' + folder + '/' + data_file_name,
                               'r') as csv_file:
                         reader = csv.reader(csv_file)
@@ -272,26 +281,32 @@ class GraspProcessor():
             elif 'PICK' in path:
                 fname = './datasets/test_pick_dataset.pkl'
                 file = open(fname, 'wb')
-                self.test_grasp_data = data_file.copy()
+                self.test_pick_data = data_file.copy()
                 print('updated file ', fname)
         else:
             if 'GRASP' in path:
                 fname = './datasets/train_validation_grasp_dataset.pkl'
                 file = open(fname, 'wb')
                 self.validation_grasp_data = data_file.copy()
+                
                 print('updated file ', fname)
             elif 'PICK' in path:
                 fname = './datasets/train_validation_pick_dataset.pkl'
                 file = open(fname, 'wb')
-                self.validation_grasp_data = data_file.copy()
+                self.validation_pick_data = data_file.copy()
                 print('updated file ', fname)
-
+        
         pkl.dump(data_file, file)
         file.close()
         print()
         print('all files saved')
-
-    #        self.save_csv('gim')
+        print('just finished a process data iterable for path', path)
+        print(self.validation_grasp_data['validation_pick_title'][0])
+        try:
+            print(self.validation_pick_data['validation_pick_title'][0])
+        except:
+            print('self.validation_pick_data doesn\'t exist yet')
+            #        self.save_csv('gim')
 
     def save_csv(self, filename, dataset_name=None):
 
