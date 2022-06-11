@@ -87,9 +87,10 @@ def perform_ablation(database, args, test=None):
         max_acc = full_lstm.get_best_performance(None)
         max_auc = np.max(full_lstm.AUC)
         performance['auc'].append(max_auc)
-        performance['acc'].append(max_acc)
+        performance['acc'].append(np.max(max_acc))
         print('model finished, saving now.')
         full_lstm.save_data()
+        print(performance)
     best_accuracies = [np.average(performance['acc'])]
     best_acc_std_dev = [np.std(performance['acc'])]
     best_auc = [np.average(performance['auc'])]
@@ -116,8 +117,6 @@ def perform_ablation(database, args, test=None):
             validation_state_data = deepcopy(database['validation_state'])
             for episode in range(len(database['train_state'])):
                 for tstep in range(len(database['train_state'][episode])):
-#                    print(f'episode: {episode}, tstep: {tstep}, used_labels: {used_labels}')
-#                    print(len(train_state_data[episode][tstep]))
                     train_state_data[episode][tstep] = [train_state_data[episode][tstep][used_label] for used_label in used_labels]
             for episode in range(len(database['validation_state'])):
                 for tstep in range(len(database['validation_state'][episode])):
@@ -143,9 +142,10 @@ def perform_ablation(database, args, test=None):
                 max_acc = base_lstm.get_best_performance(None)
                 max_auc = np.max(base_lstm.AUC)
                 performance['auc'].append(max_auc)
-                performance['acc'].append(max_acc)
+                performance['acc'].append(np.max(max_acc))
                 print('model finished, saving now')
                 base_lstm.save_data()
+                print(performance)
             feature_combo_accuracies.append(np.average(performance['acc']))
             feature_combo_auc.append(np.average(performance['auc']))
             acc_std_dev.append(np.std(performance['acc']))

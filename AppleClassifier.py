@@ -220,12 +220,13 @@ class AppleClassifier:
         """
         if ind_range is None:
             ind_range = [0,-1]
-        elif (ind_range[0] >= 0) and (ind_range[1] < 0):
+        if (ind_range[0] >= 0) and (ind_range[1] < 0):
             ind_range[1] = len(self.accuracies) + ind_range[1]
         max_acc_ind = [np.argmax(a) for a in self.accuracies[ind_range[0]:ind_range[1]]]
         max_acc = []
         for i in range(ind_range[1] - ind_range[0]):
             max_acc.append(self.accuracies[ind_range[0] + i][max_acc_ind[i]])
+        print(max_acc)
         return max_acc
 
     def generate_ID(self):
