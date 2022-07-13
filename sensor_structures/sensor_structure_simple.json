@@ -1,0 +1,7 @@
+{"Arm Force": [0, 1, 2],
+"Arm Torque": [3, 4, 5],
+"IMU Acceleration": [6, 7, 8, 15, 16, 17, 24, 25, 26],
+"IMU Gyro": [9, 10, 11, 18, 19, 20, 27, 28, 29],
+"Finger Position": [12, 21, 30],
+"Finger Speed": [13, 22, 31],
+"Finger Effort": [14, 23, 32]}

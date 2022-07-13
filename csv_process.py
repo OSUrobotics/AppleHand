@@ -107,7 +107,7 @@ class GraspProcessor():
                 for data_file_name in self.csv_order[top_folder][folder]:
                     real_file_name = data_file_name.replace('grasp', 'pick')
                     episode_state = []
-                    print('Opening up name', real_file_name)
+                    # print('Opening up name', real_file_name)
                     temp = data_file_name.split('_')
 #                    print(data_file_name)
                     if temp[2] == 'pick':
@@ -195,7 +195,7 @@ class GraspProcessor():
 
                 for data_file_name in self.csv_order[top_folder][folder]:
                     episode_state = []
-                    print('Opening up name', data_file_name)
+                    # print('Opening up name', data_file_name)
                     temp = data_file_name.split('_')
                     if temp[2] == 'pick':
                         key_thing = '_'.join(['pick',temp[3],temp[-1]])

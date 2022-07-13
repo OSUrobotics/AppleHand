@@ -69,9 +69,9 @@ plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best accuracy'], fu
 #plt.errorbar(full_data_pick['num inputs'], full_data_pick['best accuracy'], full_data_pick['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
 plt.errorbar(full_data['num inputs'], full_data['best accuracy'], full_data['acc std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
 
-plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best auc'], full_data_grasp['acc std dev'], capsize=3, color=(0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='-')
+plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best auc'], full_data_grasp['auc std dev'], capsize=3, color=(0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='-')
 #plt.errorbar(full_data_pick['num inputs'], full_data_pick['best accuracy'], full_data_pick['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
-plt.errorbar(full_data['num inputs'], full_data['best auc'], full_data['acc std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
+plt.errorbar(full_data['num inputs'], full_data['best auc'], full_data['auc std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
 
 
 

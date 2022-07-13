@@ -11,12 +11,10 @@ import matplotlib.pyplot as plt
 import torch
 import pickle as pkl
 import time
-# from raw_csv_process import process_data
-# from simple_csv_process import simple_process_data, process_data_iterable
 from csv_process import GraspProcessor
 import argparse
 from AppleClassifier import AppleClassifier
-from Ablation import perform_ablation
+import Ablation
 from utils import RNNDataset
 # from itertools import islice
 import os
@@ -27,7 +25,7 @@ from copy import deepcopy
 
 
 class ExperimentHandler:
-    def __init__(self,alt_args=None):
+    def __init__(self, alt_args=None):
         self.setup_args()
         print(self.args.phase)
         if alt_args is not None:
@@ -103,7 +101,7 @@ class ExperimentHandler:
         self.data_dict = []
         self.figure_count = 1
 
-    def modify_args(self,alt_args):
+    def modify_args(self, alt_args):
         self.args.phase = alt_args
 
     @staticmethod
@@ -125,12 +123,12 @@ class ExperimentHandler:
         if evaluate:
             params = np.load('proxy_mins_and_maxs.npy', allow_pickle=True)
             params = params.item()
-            print('test params',params)
+            print('test params', params)
             if self.args.used_features is None:
                 self.test_dataset = RNNDataset(self.test_data['validation_state'],
-                                                     self.test_data['validation_label'],
-                                                     self.test_data['validation_pick_title'], self.args.batch_size,
-                                                     range_params=False)
+                                               self.test_data['validation_label'],
+                                               self.test_data['validation_pick_title'], self.args.batch_size,
+                                               range_params=False)
             else:
                 used_labels = []
                 for label in self.args.used_features:
@@ -143,13 +141,17 @@ class ExperimentHandler:
             print('building dataset')
             if self.args.used_features is None:
                 print('first dataset')
-                self.train_dataset = RNNDataset(self.validation_data['train_state'], self.validation_data['train_label'],
-                                                self.validation_data['train_pick_title'], self.args.batch_size, range_params=False)
+                self.train_dataset = RNNDataset(self.validation_data['train_state'],
+                                                self.validation_data['train_label'],
+                                                self.validation_data['train_pick_title'], self.args.batch_size,
+                                                range_params=False)
                 params = self.train_dataset.get_params()
-                print('params from train dataset',params)
+                print('params from train dataset', params)
                 print('second dataset')
-                self.validation_dataset = RNNDataset(self.validation_data['validation_state'], self.validation_data['validation_label'],
-                                               self.validation_data['validation_pick_title'], self.args.batch_size, range_params=False)
+                self.validation_dataset = RNNDataset(self.validation_data['validation_state'],
+                                                     self.validation_data['validation_label'],
+                                                     self.validation_data['validation_pick_title'],
+                                                     self.args.batch_size, range_params=False)
                 np.save('proxy_mins_and_maxs', params)
             else:
                 used_labels = []
@@ -163,13 +165,16 @@ class ExperimentHandler:
                                                             in used_labels]
                 for episode in range(len(self.validation_data['validation_state'])):
                     for tstep in range(len(self.validation_data['validation_state'][episode])):
-                        validation_state_data[episode][tstep] = [validation_state_data[episode][tstep][used_label] for used_label in
-                                                           used_labels]
+                        validation_state_data[episode][tstep] = [validation_state_data[episode][tstep][used_label] for
+                                                                 used_label in
+                                                                 used_labels]
                 self.train_dataset = RNNDataset(train_state_data, self.validation_data['train_label'],
-                                                self.validation_data['pick_title'], self.args.batch_size, range_params=False)
+                                                self.validation_data['pick_title'], self.args.batch_size,
+                                                range_params=False)
                 params = self.train_dataset.get_params()
                 self.validation_dataset = RNNDataset(validation_state_data, self.validation_data['validation_label'],
-                                               self.validation_data['pick_title'], self.args.batch_size, range_params=False)
+                                                     self.validation_data['pick_title'], self.args.batch_size,
+                                                     range_params=False)
             np.save('proxy_mins_and_maxs', params)
 
     def setup_args(self, args=None):
@@ -227,9 +232,10 @@ class ExperimentHandler:
             except AttributeError:
                 print('THERE WAS AN ATTRIBUTE ERROR!')
                 classifier = AppleClassifier(self.train_dataset, self.validation_dataset, vars(self.args))
-#            input('stahp')
+            #            input('stahp')
             if self.args.ablate:
-                perform_ablation(self.validation_data, self.args, None)
+                a_runner = Ablation.AblationRunner(self.validation_data, self.args)
+                a_runner.perform_ablation()
             else:
                 classifier.train()
                 classifier.save_metadata()
@@ -250,7 +256,6 @@ class ExperimentHandler:
             self.classifiers.append(old_classifier)
             self.data_dict.append(old_classifier.get_data_dict())
         self.figure_count = 1
-        
 
         # Plot accuracy over time if desired
         if self.args.plot_acc:
@@ -277,7 +282,7 @@ class ExperimentHandler:
             self.test()
 
         # Visualize all plots made
-#        plt.show()
+        #        plt.show()
 
         # Plot single example if desired
         if self.args.plot_example:
@@ -289,14 +294,14 @@ class ExperimentHandler:
         acc_plot = plt.figure(self.figure_count)
         for data in self.data_dict:
             plt.plot(data['steps'], [max(accs) for accs in data['acc']])
-#            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
+            #            plt.plot(data['steps'], [max(accs) for accs in data['train_acc']])
             try:
                 plt.plot(data['steps'], [max(accs) for accs in data['test_acc']])
             except:
                 print('no test acc')
                 pass
             legend.append(data['ID'] + ' accuracy')
-#            legend.append(data['ID'] + ' training accuracy')
+            #            legend.append(data['ID'] + ' training accuracy')
             legend.append(data['ID'] + ' test accuracy')
         plt.legend(legend)
         plt.xlabel('Steps')
@@ -327,7 +332,7 @@ class ExperimentHandler:
         for data in self.data_dict:
             plt.plot(data['steps'], data['AUC'])
             try:
-                plt.plot(data['steps'],data['test_AUC'])
+                plt.plot(data['steps'], data['test_AUC'])
             except:
                 print('no test acc')
                 pass
@@ -351,7 +356,8 @@ class ExperimentHandler:
                 train_label.append(episode_label[-1])
             validation_data = []
             validation_label = []
-            for episode, episode_label in zip(self.validation_data['validation_state'], self.validation_data['validation_label']):
+            for episode, episode_label in zip(self.validation_data['validation_state'],
+                                              self.validation_data['validation_label']):
                 validation_data.append(episode[-1])
                 validation_label.append(episode_label[-1])
             RF = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -389,7 +395,8 @@ class ExperimentHandler:
             train_label.append(episode_label[-1])
         validation_data = []
         validation_label = []
-        for episode, episode_label in zip(self.validation_data['validation_state'], self.validation_data['validation_label']):
+        for episode, episode_label in zip(self.validation_data['validation_state'],
+                                          self.validation_data['validation_label']):
             validation_data.append(episode[0])
             validation_label.append(episode_label[-1])
         RF = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -427,9 +434,11 @@ class ExperimentHandler:
         for policy in self.classifiers:
             policy.load_dataset(self.train_dataset, self.test_dataset)
             try:
-                TP, FP, TP_group, FP_group, acc, acc_group = policy.evaluate(threshold=0.5, current=flag, test_set='test', ROC=True)
+                TP, FP, TP_group, FP_group, acc, acc_group = policy.evaluate(threshold=0.5, current=flag,
+                                                                             test_set='test', ROC=True)
             except RuntimeError:
-                TP, FP, TP_group, FP_group, acc, acc_group = policy.evaluate(threshold=0.5, current=True, test_set='test', ROC=True)
+                TP, FP, TP_group, FP_group, acc, acc_group = policy.evaluate(threshold=0.5, current=True,
+                                                                             test_set='test', ROC=True)
             plt.plot(FP, TP)
             # plt.plot(FP_group, TP_group)
             legend.append('policy')
@@ -438,7 +447,8 @@ class ExperimentHandler:
             best_thold = np.argmax(acc)
             print('best test accuracy is ', acc[best_thold], TP[best_thold], FP[best_thold])
             best_group_thold = np.argmax(acc_group)
-            print('best grouped test accuracy is ', acc_group[best_group_thold], TP_group[best_group_thold], FP_group[best_group_thold])
+            print('best grouped test accuracy is ', acc_group[best_group_thold], TP_group[best_group_thold],
+                  FP_group[best_group_thold])
         baseline = [0, 1]
         legend.append('Random Baseline')
         plt.plot(baseline, baseline, linestyle='--')
@@ -492,6 +502,7 @@ class ExperimentHandler:
             count += 1
         return e_name, outputs, y
 
+
 def run_experiment_group():
     num_trials = 3
     things_to_run = ['grasp', 'pick', 'full']
@@ -501,26 +512,26 @@ def run_experiment_group():
     grasp = '/GRASP'
     pick = '/PICK'
     for i in num_trials:
-        data_path=start_data_path+proxy
-        pick=True
+        data_path = start_data_path + proxy
+        pick = True
+
 
 if __name__ == "__main__":
     # Read in arguments from command line
-#    print('training 4 times with same params')
-#    phases = ['full','grasp', 'pick']
-#    print('time to do some runtime analysis')
-#    times = []
-#    for j in range(3):
-#        print(f'starting {phases[j]} phase')
-#        for i in range(4):
-#            print(f'starting trial number {i}')
-#            start = time.time()
-#            experiments = ExperimentHandler(phases[j])
-#            experiments.run_experiment()
-#            end = time.time()
-#            print('training time = ',end - start)
-#            times.append(end-start)
-#    print(times)
+    #    print('training 4 times with same params')
+    #    phases = ['full','grasp', 'pick']
+    #    print('time to do some runtime analysis')
+    #    times = []
+    #    for j in range(3):
+    #        print(f'starting {phases[j]} phase')
+    #        for i in range(4):
+    #            print(f'starting trial number {i}')
+    #            start = time.time()
+    #            experiments = ExperimentHandler(phases[j])
+    #            experiments.run_experiment()
+    #            end = time.time()
+    #            print('training time = ',end - start)
+    #            times.append(end-start)
+    #    print(times)
     experiments = ExperimentHandler()
     experiments.run_experiment()
-
