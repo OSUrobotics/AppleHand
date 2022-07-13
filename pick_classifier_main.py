@@ -492,35 +492,35 @@ class ExperimentHandler:
             count += 1
         return e_name, outputs, y
 
-def run_experiment_group():
-    num_trials = 3
-    things_to_run = ['grasp', 'pick', 'full']
-    start_data_path = './raw_data/RAL22_Paper/'
-    proxy = '4_proxy_winter22_x5'
-    real = '6_real_fall21_x5'
-    grasp = '/GRASP'
-    pick = '/PICK'
-    for i in num_trials:
-        data_path=start_data_path+proxy
-        pick=True
+#def run_experiment_group():
+#    num_trials = 3
+#    things_to_run = ['grasp', 'pick', 'full']
+#    start_data_path = './raw_data/RAL22_Paper/'
+#    proxy = '4_proxy_winter22_x5'
+#    real = '6_real_fall21_x5'
+#    grasp = '/GRASP'
+#    pick = '/PICK'
+#    for i in num_trials:
+#        data_path=start_data_path+proxy
+#        pick=True
 
 if __name__ == "__main__":
     # Read in arguments from command line
-#    print('training 4 times with same params')
-#    phases = ['full','grasp', 'pick']
-#    print('time to do some runtime analysis')
-#    times = []
-#    for j in range(3):
-#        print(f'starting {phases[j]} phase')
-#        for i in range(4):
-#            print(f'starting trial number {i}')
-#            start = time.time()
-#            experiments = ExperimentHandler(phases[j])
-#            experiments.run_experiment()
-#            end = time.time()
-#            print('training time = ',end - start)
+    print('training 4 times with same params')
+    phases = ['full','grasp', 'pick']
+    print('time to do some runtime analysis')
+    times = []
+    for j in range(3):
+        print(f'starting {phases[j]} phase')
+        for i in range(4):
+            print(f'starting trial number {i}')
+            start = time.time()
+            experiments = ExperimentHandler(phases[j])
+            experiments.run_experiment()
+            end = time.time()
+            print('training time = ',end - start)
 #            times.append(end-start)
 #    print(times)
-    experiments = ExperimentHandler()
-    experiments.run_experiment()
+#    experiments = ExperimentHandler()
+#    experiments.run_experiment()
 

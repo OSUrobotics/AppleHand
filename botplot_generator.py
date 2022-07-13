@@ -200,7 +200,28 @@ colors = [color_dict['x1'],color_dict['x5'],color_dict['x10'],color_dict['x20'],
 #sns.boxplot(data=plot_arr, palette = colors)
 
 sns.boxplot(data=plot_auc_arr, palette = colors)
-
+plot_acc_arr = np.zeros([4,15])
+plot_acc_arr[:,0] = grasp_proxy_1[:,3]
+plot_acc_arr[:,1] = grasp_proxy_5[:,3]
+plot_acc_arr[:,2] = grasp_proxy_10[:,3]
+plot_acc_arr[:,3] = grasp_proxy_20[:,3]
+plot_acc_arr[:,4] = grasp_real[:,1]
+plot_acc_arr[:,5] = pick_proxy_1[:,3]
+plot_acc_arr[:,6] = pick_proxy_5[:,3]
+plot_acc_arr[:,7] = pick_proxy_10[:,3]
+plot_acc_arr[:,8] = pick_proxy_20[:,3]
+plot_acc_arr[:,9] = pick_real[:,1]
+plot_acc_arr[:,10] = full_proxy_1[:,3]
+plot_acc_arr[:,11] = full_proxy_5[:,3]
+plot_acc_arr[:,12] = full_proxy_10[:,3]
+plot_acc_arr[:,13] = full_proxy_20[:,3]
+plot_acc_arr[:,14] = full_real[:,1]
+print(np.average(plot_acc_arr, axis=0))
+print(np.std(plot_acc_arr, axis=0))
+print()
+print()
+print(np.average(plot_auc_arr, axis=0))
+print(np.std(plot_auc_arr, axis=0))
 #plt.boxplot(full_proxy[:,0:2])
 #plt.boxplot(grasp_proxy[:,0:2])
 #plt.boxplot(pick_proxy[:,0:2])

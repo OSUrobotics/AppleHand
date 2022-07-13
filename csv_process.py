@@ -22,13 +22,13 @@ class GraspProcessor():
         self.test_pick_data = {}
         self.validation_combined_data = {}
         self.test_combined_data = {}
-        self.csv_order = {'training_set': {'successful': [], 'failed': [], 'could_be_success': []},
-                          'test_set': {'successful': [], 'failed': [], 'could_be_success': []}}
+        self.csv_order = {'training_set': {'successful': [], 'failed': []},
+                          'validation_set': {'successful': [], 'failed': []}}
 
-        self.top_level = ['training_set', 'test_set']
+        self.top_level = ['training_set', 'validation_set']
         #        self.mid_level = 'pp4_folders_labeled'
-        self.mid_level = 'new_pp5_labeled'
-        self.bot_level = ['successful', 'failed', 'could_be_success']
+        self.mid_level = ''
+        self.bot_level = ['successful', 'failed']
         self.data_labels = {'Arm Force': [0, 1, 2],
                             'Arm Torque': [3, 4, 5],
                             'IMU Acceleration': [6, 7, 8, 15, 16, 17, 24, 25, 26],
@@ -38,8 +38,8 @@ class GraspProcessor():
                             'Finger Effort': [14, 23, 32]}
 
     def process_full_validation(self, path, evaluate=False):
-        self.csv_order = {'training_set': {'successful': [], 'failed': [], 'could_be_success': []},
-                          'test_set': {'successful': [], 'failed': [], 'could_be_success': []}}
+        self.csv_order = {'training_set': {'successful': [], 'failed': []},
+                          'validation_set': {'successful': [], 'failed': []}}
         self.process_data_iterable(path + '/GRASP', evaluate)
         self.process_data_pick(path + '/PICK', evaluate)
         if evaluate:
@@ -89,11 +89,11 @@ class GraspProcessor():
         @param path - Filepath containing rosbags and csvs from apple picking"""
         pcount = 0
         ncount = 0
-        states = {'training_set': [], 'test_set': []}
-        labels = {'training_set': [], 'test_set': []}
-        final_csv_order = {'training_set': {'successful': [], 'failed': [], 'could_be_success': []},
-                           'test_set': {'successful': [], 'failed': [], 'could_be_success': []}}
-        pick_names = {'training_set': [], 'test_set': []}
+        states = {'training_set': [], 'validation_set': []}
+        labels = {'training_set': [], 'validation_set': []}
+        final_csv_order = {'training_set': {'successful': [], 'failed': []},
+                           'validation_set': {'successful': [], 'failed': []}}
+        pick_names = {'training_set': [], 'validation_set': []}
         # This loop iterates through all the folders in the path folder, which contains different folders for each set of starting noises
         for top_folder in self.top_level:
             for folder in self.bot_level:
@@ -114,7 +114,7 @@ class GraspProcessor():
                         key_thing = '_'.join(['pick', temp[3], temp[-1]])
                     else:
                         key_thing = '_'.join([temp[2], temp[-1]])
-                    with open(path + '/' + self.mid_level + '/' + top_folder + '/' + folder + '/' + real_file_name,
+                    with open(path + '/' + top_folder + '/' + folder + '/' + real_file_name,
                               'r') as csv_file:
                         reader = csv.reader(csv_file)
                         temp = False
@@ -150,8 +150,8 @@ class GraspProcessor():
         #        print(type(states['training_set']))
         #        input(states['training_set'][0])
         data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
-                     'validation_state': states['test_set'], 'validation_label': labels['test_set'],
-                     'train_pick_title': pick_names['training_set'], 'validation_pick_title': pick_names['test_set']}
+                     'validation_state': states['validation_set'], 'validation_label': labels['validation_set'],
+                     'train_pick_title': pick_names['training_set'], 'validation_pick_title': pick_names['validation_set']}
         #        input(states['training_set'])
         if evaluate:
             fname = './datasets/test_pick_dataset.pkl'
@@ -176,18 +176,18 @@ class GraspProcessor():
         @param path - Filepath containing rosbags and csvs from apple picking"""
         pcount = 0
         ncount = 0
-        states = {'training_set': [], 'test_set': []}
-        labels = {'training_set': [], 'test_set': []}
-        pick_names = {'training_set': [], 'test_set': []}
+        states = {'training_set': [], 'validation_set': []}
+        labels = {'training_set': [], 'validation_set': []}
+        pick_names = {'training_set': [], 'validation_set': []}
         # This loop iterates through all the folders in the path folder,
         # which contains different folders for each set of starting noises
-        final_csv_order = {'training_set': {'successful': [], 'failed': [], 'could_be_success': []},
-                           'test_set': {'successful': [], 'failed': [], 'could_be_success': []}}
+        final_csv_order = {'training_set': {'successful': [], 'failed': []},
+                           'validation_set': {'successful': [], 'failed': []}}
         for top_folder in self.top_level:
             for folder in self.bot_level:
                 if len(self.csv_order[top_folder][folder]) == 0:
                     self.csv_order[top_folder][folder] = os.listdir(
-                        path + '/' + self.mid_level + '/' + top_folder + '/' + folder)
+                        path + '/'  + top_folder + '/' + folder)
                     for i in range(len(self.csv_order[top_folder][folder])):
                         self.csv_order[top_folder][folder][i] = self.csv_order[top_folder][folder][i]
                 # This loop iterates through the folders in the selected folder in path. These folders contain csvs with all the
@@ -262,8 +262,8 @@ class GraspProcessor():
         if self.csv_order != final_csv_order:
             print('grasp csv order issue, original csv order: ', self.csv_order, 'new order: ', final_csv_order)
         data_file = {'train_state': states['training_set'], 'train_label': labels['training_set'],
-                     'validation_state': states['test_set'], 'validation_label': labels['test_set'],
-                     'train_pick_title': pick_names['training_set'], 'validation_pick_title': pick_names['test_set']}
+                     'validation_state': states['validation_set'], 'validation_label': labels['validation_set'],
+                     'train_pick_title': pick_names['training_set'], 'validation_pick_title': pick_names['validation_set']}
         #        input(states['training_set'])
         if evaluate:
             if 'GRASP' in path:

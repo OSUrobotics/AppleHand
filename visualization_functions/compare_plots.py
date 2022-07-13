@@ -55,23 +55,60 @@ import matplotlib.pyplot as plt
 #with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data02_16_22_1626.pkl','rb') as file:
 #    ablation_both = pkl.load(file)
 
-with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data06_08_22_2029.pkl','rb') as file:
+with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data/grasp_ablation_data06_11_22_2134.pkl','rb') as file:
     full_data_grasp = pkl.load(file)
 
-with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data06_08_22_1422.pkl','rb') as file:
+with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data06_14_22_0718.pkl','rb') as file:
     full_data = pkl.load(file)
     
-#with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data03_12_22_0009.pkl','rb') as file:
-#    full_data_pick = pkl.load(file)
+with open('/home/orochi/apple_picking/IROS_apple/AppleHand/generated_data/grasp_ablation_data06_11_22_2353.pkl','rb') as file:
+    full_data_pick = pkl.load(file)
 
+print([key for key in full_data_grasp.keys()])
+full_data_grasp
 #print(ablation_both)
-plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best accuracy'], full_data_grasp['acc std dev'], capsize=3, color=(0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='-')
-#plt.errorbar(full_data_pick['num inputs'], full_data_pick['best accuracy'], full_data_pick['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
-plt.errorbar(full_data['num inputs'], full_data['best accuracy'], full_data['acc std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
+print('full')
+print(full_data['names'])
+print('pick')
+print(full_data_pick['names'])
+print('grasp')
+print(full_data_grasp['names'])
 
-plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best auc'], full_data_grasp['acc std dev'], capsize=3, color=(0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='-')
-#plt.errorbar(full_data_pick['num inputs'], full_data_pick['best accuracy'], full_data_pick['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
-plt.errorbar(full_data['num inputs'], full_data['best auc'], full_data['acc std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
+all_names = {'Arm Force X': [0],
+              'Arm Force Y': [1],
+              'Arm Force Z': [2],
+              'Arm Torque Roll': [3],
+              'Arm Torque Pitch': [4],
+              'Arm Torque Yaw': [5],
+              'IMU Acceleration X':[6, 15, 24],
+              'IMU Acceleration Y':[7, 16, 25],
+              'IMU Acceleration Z':[8, 17, 26],
+              'IMU Gyro X': [9, 18, 27],
+              'IMU Gyro Y': [10, 19, 28],
+              'IMU Gyro Z': [11, 20, 29],
+              'Finger Position': [12, 21, 30],
+              'Finger Speed': [13, 22, 31],
+              'Finger Effort': [14, 23, 32]}
+all_names = [name for name in all_names.keys()]
+
+for name in all_names:
+    if name not in full_data['names']:
+        print('in full phase, ',name,' is the best sensor')
+    if name not in full_data_pick['names']:
+        print('in pick phase, ',name,' is the best sensor')
+    if name not in full_data_grasp['names']:
+        print('in grasp phase, ',name,' is the best sensor')
+
+## acc
+#plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best accuracy'], full_data_grasp['accuracy std dev'], capsize=3, color=(0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='-')
+#plt.errorbar(full_data_pick['num inputs'], full_data_pick['best accuracy'], full_data_pick['accuracy std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
+#plt.errorbar(full_data['num inputs'], full_data['best accuracy'], full_data['accuracy std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
+
+
+# AUC
+plt.errorbar(full_data_grasp['num inputs'], full_data_grasp['best auc'], full_data_grasp['auc std dev'], capsize=3, color=(0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='-')
+plt.errorbar(full_data_pick['num inputs'], full_data_pick['best auc'], full_data_pick['auc std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
+plt.errorbar(full_data['num inputs'], full_data['best auc'], full_data['auc std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
 
 
 
@@ -79,9 +116,9 @@ plt.errorbar(full_data['num inputs'], full_data['best auc'], full_data['acc std 
 #plt.errorbar(ablation_grasp['num inputs'], ablation_grasp['best accuracy'], ablation_grasp['std dev'], capsize=3, color=(0.00392156862745098, 0.45098039215686275, 0.6980392156862745),linestyle='-')
 #plt.errorbar(ablation_pick['num inputs'], ablation_pick['best accuracy'], ablation_pick['std dev'], capsize=3, color= (0.8705882352941177, 0.5607843137254902, 0.0196078431372549),linestyle='--')
 #plt.errorbar(ablation_both['num inputs'], ablation_both['best accuracy'], ablation_both['std dev'], capsize=3, color= (0.00784313725490196, 0.6196078431372549, 0.45098039215686275), linestyle=':')
-plt.legend(['Grasp Phase', 'Both Grasp and Pick Phase'])
+plt.legend(['Grasp Phase', 'Pick Phase','Both Grasp and Pick Phase'])
 plt.xlabel('Number of Network Inputs')
-plt.ylabel('Accuracy')
+plt.ylabel('AUC')
 plt.show()
 
 
